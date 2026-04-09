@@ -395,6 +395,19 @@ function registerAllFiles(){
       (m.progressPayments||[]).forEach(pp=>regFiles(pp.files||[]));
     });
     (p.inspections||[]).forEach(i=>regFiles(i.files||[]));
+    (p.vendors||[]).forEach(v=>regFiles(v.files||[]));
+    (p.invoices||[]).forEach(inv=>{
+      regFiles(inv.files||[]);
+      regFiles(inv.proofFiles||[]);
+      regFiles(inv.lienFiles||[]);
+      (inv.partialPayments||[]).forEach(pp=>regFiles(pp.files||[]));
+      (inv.payments||[]).forEach(pay=>regFiles(pay.proofFiles||[]));
+    });
+    (p.checklist||[]).forEach(it=>{
+      regFiles(it.files||[]);
+      (it.comments||[]).forEach(c=>regFiles(c.files||[]));
+    });
+    (p.qaqcLog||[]).forEach(it=>regFiles(it.files||[]));
   });
 }
 let DB = loadDB();
@@ -402,7 +415,7 @@ registerAllFiles();
 const proj = () => DB.projects.find(p=>p.id===DB.activeId)||DB.projects[0]||null;
 const setProj = id => { DB.activeId=id; saveDB(); };
 
-function regFiles(arr){ (arr||[]).forEach(f=>{ if(f&&f.id&&f.data) FA[f.id]=f; }); }
+function regFiles(arr){ (arr||[]).forEach(f=>{ if(f&&f.id&&(f.data||f.path)) FA[f.id]=f; }); }
 
 // ══════════════════════════════════════════════════════════════════
 //  NAVIGATION
@@ -3911,6 +3924,46 @@ function getEmailConfig(){
 const DEFAULT_API_BASE=(typeof import.meta!=='undefined'&&import.meta.env&&import.meta.env.VITE_API_BASE
   ? String(import.meta.env.VITE_API_BASE)
   : 'http://127.0.0.1:3001/api').trim();
+function getApiBase(){
+  return DEFAULT_API_BASE.replace(/\/+$/,'');
+}
+function getBackendBase(){
+  return getApiBase().replace(/\/api$/,'');
+}
+function getUploadProjectId(){
+  return proj()?.id||DB?.activeId||DB?.activeProjectId||'general';
+}
+function getFileUrl(file){
+  if(!file) return '';
+  if(file.path) return getBackendBase()+file.path;
+  return file.data||'';
+}
+async function fetchFileBlob(file){
+  if(!file) throw new Error('File not found');
+  const url=getFileUrl(file);
+  if(!url) throw new Error('File not found');
+  const res=await fetch(url);
+  if(!res.ok) throw new Error('File download failed');
+  return await res.blob();
+}
+async function uploadFilesToServer(fileList, projectId){
+  const files=Array.from(fileList||[]);
+  if(!files.length) return [];
+  const form=new FormData();
+  form.append('projectId', projectId||getUploadProjectId());
+  files.forEach(file=>form.append('files', file));
+  const res=await fetch(getApiBase()+'/files/upload',{method:'POST',body:form});
+  if(!res.ok){
+    let msg='Upload failed';
+    try{
+      const data=await res.json();
+      msg=data?.error||msg;
+    }catch(e){}
+    throw new Error(msg);
+  }
+  const data=await res.json();
+  return Array.isArray(data?.files)?data.files:[];
+}
 let syncTimer=null;
 let syncInFlight=false;
 let hydrateStarted=false;
@@ -3954,7 +4007,32 @@ function normalizeDBShape(input){
     });
     p.inspections.forEach(i=>{if(!i.files)i.files=[];});
     if(!p.invoices)p.invoices=[]; if(!p.vendors)p.vendors=[]; if(!p.checklist)p.checklist=[]; if(!p.qaqcLog)p.qaqcLog=[]; if(!p.chkCategories)p.chkCategories=[]; (p.checklist||[]).forEach(it=>{(it.comments||[]).forEach(c=>regFiles(c.files||[]));}); (p.qaqcLog||[]).forEach(it=>regFiles(it.files||[])); (p.checklist||[]).forEach(it=>{if(!it.comments)it.comments=[];}); p.vendors.forEach(v=>regFiles(v.files||[]));
-    p.invoices.forEach(inv=>{if(!inv.files)inv.files=[];});
+    p.invoices.forEach(inv=>{
+      if(!inv.files)inv.files=[];
+      if(!inv.proofFiles)inv.proofFiles=[];
+      if(!inv.lienFiles)inv.lienFiles=[];
+      if(!inv.partialPayments)inv.partialPayments=[];
+      inv.partialPayments.forEach(pp=>{if(!pp.files)pp.files=[]; regFiles(pp.files||[]);});
+      if(!inv.payments)inv.payments=[];
+      inv.payments.forEach(pay=>{
+        if(!pay.proofFiles) pay.proofFiles=pay.proofFile?[pay.proofFile]:[];
+        if((!pay.proofFiles||!pay.proofFiles.length)&&pay.proofData){
+          const legacyProof={
+            id:pay.proofId||`${pay.id}_proof`,
+            name:pay.proofName||'Payment Proof',
+            size:pay.proofSize||0,
+            data:pay.proofData,
+            at:pay.date||new Date().toISOString()
+          };
+          pay.proofFiles=[legacyProof];
+          pay.proofFile=legacyProof;
+        }
+        regFiles(pay.proofFiles||[]);
+      });
+      regFiles(inv.files||[]);
+      regFiles(inv.proofFiles||[]);
+      regFiles(inv.lienFiles||[]);
+    });
   });
   return db;
 }
@@ -4018,6 +4096,138 @@ saveDB=function(){
   }
   registerAllFiles();
   queueRemoteSync();
+};
+handleFileInput = async function(input, listId){
+  const files=Array.from(input?.files||[]);
+  if(!files.length) return;
+  const valid=files.filter(file=>{
+    if(file.size>300*1024*1024){
+      toast('âš  Max 300MB: '+file.name);
+      return false;
+    }
+    return true;
+  });
+  if(!valid.length) return;
+  try{
+    const uploaded=await uploadFilesToServer(valid, getUploadProjectId());
+    uploaded.forEach(f=>{
+      FA[f.id]=f;
+      mPending.push(f);
+    });
+    renderPendingInModal();
+    toast('âœ“ Uploaded '+uploaded.length+' file(s)');
+  }catch(e){
+    toast('âš  Upload failed: '+(e?.message||'Please try again'));
+    console.error('File upload failed:',e);
+  }finally{
+    if(input&&typeof input.value==='string') input.value='';
+  }
+};
+getFileRecord = function(fid){
+  let f=FA[fid];
+  if(!f){
+    registerAllFiles();
+    f=FA[fid];
+  }
+  return (f&&(f.data||f.path))?f:null;
+};
+dlFile = async function(fid){
+  const f=getFileRecord(fid);
+  if(!f){toast('âš  File not found â€” it may not have been saved yet');return;}
+  try{
+    const blob=await fetchFileBlob(f);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=f.name||f.filename||'download';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    toast('â¬‡ Downloading '+(f.name||'file'));
+  }catch(e){
+    toast('âš  Failed to download '+(f.name||'file'));
+    console.error('Download failed:',e);
+  }
+};
+viewFile = async function(fid){
+  const f=getFileRecord(fid);
+  if(!f){toast('âš  File not found â€” it may not have been saved yet');return;}
+  try{
+    const blob=await fetchFileBlob(f);
+    const url=URL.createObjectURL(blob);
+    const win=window.open(url,'_blank','noopener,noreferrer');
+    if(!win){
+      URL.revokeObjectURL(url);
+      await dlFile(fid);
+      toast('âš  Preview blocked â€” downloading instead');
+      return;
+    }
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    toast('Opening '+(f.name||'file'));
+  }catch(e){
+    toast('âš  Failed to open '+(f.name||'file'));
+    console.error('Preview failed:',e);
+  }
+};
+exportAllFiles = function(){
+  const p=proj(); if(!p){toast('âš  No project selected');return;}
+  const all=[];
+  (p.quotes||[]).forEach(q=>{
+    (q.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+    (q.payMilestones||[]).forEach(pm=>{
+      (pm.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+      (pm.lienFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+      (pm.invoiceFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+    });
+  });
+  (p.plans||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+  (p.inspections||[]).forEach(i=>(i.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
+  (p.vendors||[]).forEach(v=>(v.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
+  (p.invoices||[]).forEach(inv=>{
+    (inv.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+    (inv.proofFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+    (inv.lienFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+    (inv.partialPayments||[]).forEach(pp=>(pp.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
+    (inv.payments||[]).forEach(pay=>(pay.proofFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
+  });
+  if(!all.length){toast('âš  No files in this project');return;}
+  all.forEach((f,i)=>setTimeout(()=>dlFile(f.id),i*350));
+  toast(`â¬‡ Downloading ${all.length} file(s)â€¦`);
+};
+saveInvPayment = async function(){
+  const invId=vEl('invpay-inv-id').value;
+  const date=vEl('invpay-date').value;
+  const amount=parseFloat(vEl('invpay-amount').value||'0');
+  const note=vEl('invpay-note').value.trim();
+  if(!date||!amount){toast('âš  Date and amount are required');return;}
+  const p=proj();if(!p)return;
+  const inv=(p.invoices||[]).find(x=>x.id===invId);if(!inv)return;
+  if(!inv.payments)inv.payments=[];
+  const payId='pp_'+Math.random().toString(36).slice(2,10);
+  const fileInput=vEl('invpay-proof');
+  try{
+    let proofFiles=[];
+    if(fileInput&&fileInput.files&&fileInput.files[0]){
+      proofFiles=await uploadFilesToServer([fileInput.files[0]], p.id);
+      regFiles(proofFiles);
+    }
+    inv.payments.push({
+      id:payId,
+      date,
+      amount,
+      note,
+      proofFile:proofFiles[0]||null,
+      proofFiles
+    });
+    saveDB();
+    closeInvPayment();
+    renderAll();
+    toast('ðŸ’µ Payment recorded: '+fmtMoney(amount));
+  }catch(e){
+    toast('âš  Payment proof upload failed: '+(e?.message||'Please try again'));
+    console.error('Payment proof upload failed:',e);
+  }
 };
 function getEmailApiBase(cfg){
   const raw=(cfg?.apiBase||DEFAULT_API_BASE).trim();
