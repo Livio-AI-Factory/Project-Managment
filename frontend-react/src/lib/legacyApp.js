@@ -369,7 +369,18 @@ const SEED = {
 };
 
 function loadDB(){
-  return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera'};
+  try{
+    if(typeof localStorage!=='undefined'){
+      const raw=localStorage.getItem(SK);
+      if(raw){
+        const parsed=JSON.parse(raw);
+        if(parsed&&typeof parsed==='object') return parsed;
+      }
+    }
+  }catch(e){
+    console.warn('Local DB load failed:',e?.message||e);
+  }
+  return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera',activeProjectId:'proj_madera'};
 }
 function saveDB(){
   try{
@@ -3921,9 +3932,21 @@ function getEmailConfig(){
   try{return JSON.parse(localStorage.getItem('livio_email_config')||'{}');}
   catch{return {};}
 }
-const DEFAULT_API_BASE=(typeof import.meta!=='undefined'&&import.meta.env&&import.meta.env.VITE_API_BASE
-  ? String(import.meta.env.VITE_API_BASE)
-  : 'http://127.0.0.1:3001/api').trim();
+function detectDefaultApiBase(){
+  const envBase=(typeof import.meta!=='undefined'&&import.meta.env&&import.meta.env.VITE_API_BASE)
+    ? String(import.meta.env.VITE_API_BASE).trim()
+    : '';
+  if(envBase) return envBase;
+  if(typeof window!=='undefined'&&window.location){
+    const {hostname, origin, port}=window.location;
+    const isLocalHost=hostname==='127.0.0.1'||hostname==='localhost';
+    const isFrontendDevPort=['3000','4173','5173','5500'].includes(String(port||''));
+    if(isLocalHost&&isFrontendDevPort) return 'http://127.0.0.1:3001/api';
+    return origin.replace(/\/+$/,'')+'/api';
+  }
+  return 'http://127.0.0.1:3001/api';
+}
+const DEFAULT_API_BASE=detectDefaultApiBase();
 function getApiBase(){
   return DEFAULT_API_BASE.replace(/\/+$/,'');
 }
@@ -3967,6 +3990,7 @@ async function uploadFilesToServer(fileList, projectId){
 let syncTimer=null;
 let syncInFlight=false;
 let hydrateStarted=false;
+let hasLocalChanges=false;
 function normalizeDBShape(input){
   const raw=(input&&typeof input==='object')?input:{};
   const hasProjectsField=Array.isArray(raw.projects);
@@ -4041,17 +4065,32 @@ function setDB(nextDB){
   if(typeof window!=='undefined') window.DB=DB;
 }
 function persistDBLocal(){
-  return;
+  if(typeof localStorage==='undefined') return;
+  const activeId=DB?.activeId??DB?.activeProjectId??null;
+  localStorage.setItem(SK,JSON.stringify({
+    ...DB,
+    activeId,
+    activeProjectId:activeId
+  }));
 }
 async function syncRemoteDB(){
   if(syncInFlight) return;
   syncInFlight=true;
   try{
-    await fetch(DEFAULT_API_BASE+'/projects/sync',{
+    const res=await fetch(getApiBase()+'/projects/sync',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(DB)
     });
+    if(!res.ok){
+      let msg='Failed to sync data';
+      try{
+        const data=await res.json();
+        msg=data?.error||msg;
+      }catch(e){}
+      throw new Error(msg);
+    }
+    hasLocalChanges=false;
   }catch(e){
     console.warn('Remote sync failed:',e?.message||e);
   }finally{
@@ -4066,9 +4105,13 @@ async function hydrateDBFromServer(){
   if(hydrateStarted) return;
   hydrateStarted=true;
   try{
-    const res=await fetch(DEFAULT_API_BASE+'/projects/all');
+    const res=await fetch(getApiBase()+'/projects/all');
     if(!res.ok) throw new Error('Failed to load shared data');
     const remote=normalizeDBShape(await res.json());
+    if(hasLocalChanges){
+      queueRemoteSync(50);
+      return;
+    }
     if((remote.projects||[]).length){
       setDB(remote);
       try{persistDBLocal();}catch(e){}
@@ -4087,6 +4130,7 @@ saveDB=function(){
   try{
     DB.activeProjectId=DB.activeId??DB.activeProjectId??null;
     persistDBLocal();
+    hasLocalChanges=true;
   }catch(e){
     const msg=e.name==='QuotaExceededError'||e.code===22
       ?'âš  Browser storage full â€” files are too large for local storage. Export your project to save data.'

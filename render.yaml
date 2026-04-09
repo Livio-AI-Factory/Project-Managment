@@ -5,12 +5,33 @@ services:
     rootDir: backend
     buildCommand: npm install
     startCommand: npm start
+    disk:
+      name: livio-data
+      mountPath: /var/data/livio
+      sizeGB: 1
     envVars:
+      - key: FRONTEND_ORIGIN
+        sync: false
       - key: DB_FILE
-        value: ./data/db.json
+        value: /var/data/livio/db.json
+      - key: UPLOAD_DIR
+        value: /var/data/livio/uploads
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_DB_TABLE
+        value: app_state
+      - key: SUPABASE_DB_ROW_ID
+        value: main
+      - key: SUPABASE_STORAGE_BUCKET
+        value: uploads
 
   - type: static
     name: livio-frontend
     rootDir: frontend-react
     buildCommand: npm install && npm run build
     staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE
+        sync: false

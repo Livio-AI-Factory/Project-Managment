@@ -7,12 +7,14 @@
 require('dotenv').config();
 const express  = require('express');
 const cors     = require('cors');
-const path     = require('path');
 const fs       = require('fs');
+const { getDbPath, getPersistentRoot, getUploadDir } = require('./lib/storagePaths');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
-const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || path.join(__dirname, 'uploads'));
+const UPLOAD_DIR = getUploadDir();
+const DB_PATH = getDbPath();
+const PERSISTENT_ROOT = getPersistentRoot();
 const STORAGE_DRIVER = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? 'supabase' : 'local';
 
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -83,6 +85,8 @@ app.listen(PORT, () => {
   console.log(`  URL     : http://localhost:${PORT}`);
   console.log(`  Health  : http://localhost:${PORT}/api/health`);
   console.log(`  Storage : ${STORAGE_DRIVER}`);
-  console.log(`  Data    : ${path.resolve(process.env.DB_FILE || './data/db.json')}`);
+  console.log(`  Data    : ${DB_PATH}`);
+  console.log(`  Uploads : ${UPLOAD_DIR}`);
+  if (PERSISTENT_ROOT) console.log(`  Volume  : ${PERSISTENT_ROOT}`);
   console.log('');
 });

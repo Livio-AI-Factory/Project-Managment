@@ -1,8 +1,8 @@
 const fs = require('fs');
-const path = require('path');
 const { getSupabaseAdmin, getSupabaseConfig, hasSupabaseConfig } = require('../lib/supabase');
+const { getDbPath } = require('../lib/storagePaths');
 
-const DB_PATH = path.resolve(process.env.DB_FILE || path.join(__dirname, '../data/db.json'));
+const DB_PATH = getDbPath();
 const EMPTY_DB = { projects: [], activeId: null, activeProjectId: null };
 
 function cloneEmptyDB() {
