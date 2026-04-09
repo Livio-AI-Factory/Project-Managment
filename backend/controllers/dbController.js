@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const { getSupabaseAdmin, getSupabaseConfig, hasSupabaseConfig } = require('../lib/supabase');
 const { getDbPath } = require('../lib/storagePaths');
 
