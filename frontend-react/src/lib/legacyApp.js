@@ -369,48 +369,11 @@ const SEED = {
 };
 
 function loadDB(){
-  try{
-    const s=localStorage.getItem(SK);
-    if(!s) return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera'};
-    const db=JSON.parse(s);
-    // Migrate: ensure all required arrays exist on every project and quote
-    (db.projects||[]).forEach(p=>{
-      if(!p.works)p.works=[];
-      if(!p.milestones)p.milestones=[];
-      if(!p.quotes)p.quotes=[];
-      if(!p.plans)p.plans=[];
-      if(!p.inspections)p.inspections=[];
-      p.milestones.forEach(m=>{
-        if(!m.payFiles)m.payFiles=[];
-        if(!m.progressPayments)m.progressPayments=[];
-        m.progressPayments.forEach(pp=>{if(!pp.files)pp.files=[];});
-      });
-      p.quotes.forEach(q=>{
-        if(!q.files)q.files=[];
-        // Support both old key names for payment milestones
-        if(!q.payMilestones){
-          q.payMilestones=q.paymilestones||q.paymentMilestones||[];
-          delete q.paymilestones;
-          delete q.paymentMilestones;
-        }
-        q.payMilestones.forEach(pm=>{
-          if(!pm.files)pm.files=[];
-          if(!pm.lienFiles)pm.lienFiles=[];
-          if(pm.paid===undefined)pm.paid=false;
-          if(!pm.paidDate)pm.paidDate='';
-        });
-      });
-      p.inspections.forEach(i=>{if(!i.files)i.files=[];});
-      if(!p.invoices)p.invoices=[]; if(!p.vendors)p.vendors=[]; if(!p.checklist)p.checklist=[]; if(!p.qaqcLog)p.qaqcLog=[]; if(!p.chkCategories)p.chkCategories=[]; (p.checklist||[]).forEach(it=>{(it.comments||[]).forEach(c=>regFiles(c.files||[]));}); (p.qaqcLog||[]).forEach(it=>regFiles(it.files||[])); (p.checklist||[]).forEach(it=>{if(!it.comments)it.comments=[];}); p.vendors.forEach(v=>regFiles(v.files||[]));
-      p.invoices.forEach(inv=>{if(!inv.files)inv.files=[];});
-    });
-    return db;
-  }
-  catch(e){ return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera'}; }
+  return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera'};
 }
 function saveDB(){
   try{
-    localStorage.setItem(SK,JSON.stringify(DB));
+    DB.activeProjectId=DB.activeId??DB.activeProjectId??null;
   }catch(e){
     const msg=e.name==='QuotaExceededError'||e.code===22
       ?'⚠ Browser storage full — files are too large for local storage. Export your project to save data.'
@@ -4000,7 +3963,7 @@ function setDB(nextDB){
   if(typeof window!=='undefined') window.DB=DB;
 }
 function persistDBLocal(){
-  localStorage.setItem(SK,JSON.stringify(DB));
+  return;
 }
 async function syncRemoteDB(){
   if(syncInFlight) return;
