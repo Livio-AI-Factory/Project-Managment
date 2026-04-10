@@ -3938,8 +3938,8 @@ function clearPaySearch(){
 // ── SETTINGS PAGE ────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
 function getEmailConfig(){
-  try{return JSON.parse(localStorage.getItem('livio_email_config')||'{}');}
-  catch{return {};}
+  try{localStorage.removeItem('livio_email_config');}catch{}
+  return {};
 }
 function detectDefaultApiBase(){
   const envBase=(typeof import.meta!=='undefined'&&import.meta.env&&import.meta.env.VITE_API_BASE)
@@ -3956,6 +3956,14 @@ function detectDefaultApiBase(){
   return 'http://127.0.0.1:3001/api';
 }
 const DEFAULT_API_BASE=detectDefaultApiBase();
+function shouldIgnoreLocalApiBase(raw){
+  if(!raw||typeof window==='undefined'||!window.location) return false;
+  const value=String(raw).trim().toLowerCase();
+  const isSavedLocal=value.startsWith('http://127.0.0.1:3001')||value.startsWith('http://localhost:3001');
+  const { hostname }=window.location;
+  const runningLocal=hostname==='127.0.0.1'||hostname==='localhost';
+  return isSavedLocal && !runningLocal;
+}
 function getApiBase(){
   return DEFAULT_API_BASE.replace(/\/+$/,'');
 }
@@ -4286,18 +4294,17 @@ saveInvPayment = async function(){
     console.error('Payment proof upload failed:',e);
   }
 };
-function getEmailApiBase(cfg){
-  const raw=(cfg?.apiBase||DEFAULT_API_BASE).trim();
-  return raw.replace(/\/+$/,'');
+function getEmailApiBase(){
+  return DEFAULT_API_BASE.replace(/\/+$/,'');
 }
-function hasSmtpOverride(cfg){
-  return !!(cfg?.host&&cfg?.port&&cfg?.user&&cfg?.pass);
+function hasSmtpOverride(){
+  return false;
 }
-function getEmailFromName(cfg){
-  return (cfg?.fromName||'Livio Building Systems').trim()||'Livio Building Systems';
+function getEmailFromName(){
+  return 'Livio Building Systems';
 }
-function getEmailReplyTo(cfg){
-  return (cfg?.fromEmail||'').trim();
+function getEmailReplyTo(){
+  return '';
 }
 function getEmailStatusMarkup(cfg){
   const apiBase=getEmailApiBase(cfg);
@@ -4393,8 +4400,9 @@ function _renderEmailCfgStatus(){
 }
 
 function saveEmailConfig(){
+  const enteredApiBase=(vEl('cfg-api-base')?.value||'').trim();
   const cfg={
-    apiBase:(vEl('cfg-api-base')?.value||'').trim()||DEFAULT_API_BASE,
+    apiBase:(shouldIgnoreLocalApiBase(enteredApiBase)?DEFAULT_API_BASE:enteredApiBase)||DEFAULT_API_BASE,
     host:(vEl('cfg-smtp-host')?.value||'').trim(),
     port:(vEl('cfg-smtp-port')?.value||'').trim()||'587',
     user:(vEl('cfg-smtp-user')?.value||'').trim(),
@@ -7198,6 +7206,9 @@ export function initLegacyApp() {
   window.saveEmailConfig = saveEmailConfig;
   window.testEmailConfig = testEmailConfig;
   window.clearEmailConfig = clearEmailConfig;
+  window.getApiBase = getApiBase;
+  window.getBackendBase = getBackendBase;
+  window.__LIVIO_API_BASE = getApiBase();
 
   // File helpers
   window.handleFileInput = handleFileInput;

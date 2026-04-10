@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -189,9 +189,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <body>
 
 <div class="topbar">
-  <div class="tb-title">🧾 Client Invoices</div>
+  <div class="tb-title">?? Client Invoices</div>
   <div class="tb-right">
-    <button class="btn btn-ghost btn-sm" onclick="openEmailSettings()">⚙ Email Settings</button>
     <button class="btn btn-navy btn-sm" onclick="openAddInvoice()">+ Add Invoice</button>
   </div>
 </div>
@@ -205,12 +204,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 
 <div id="toast-container"></div>
 
-<!-- ══════════════════════════════════ MODALS ══════════════════════════════════ -->
+<!-- ---------------------------------- MODALS ---------------------------------- -->
 
 <!-- EDIT CLIENT INFO MODAL -->
 <div class="modal-overlay" id="editClientModal">
   <div class="modal" style="max-width:480px">
-    <div class="modal-hd"><h3>👤 Edit Client Info</h3><button class="modal-close" onclick="closeModal('editClientModal')">✕</button></div>
+    <div class="modal-hd"><h3>?? Edit Client Info</h3><button class="modal-close" onclick="closeModal('editClientModal')">?</button></div>
     <div class="modal-body">
       <div><label class="fi-lbl">Full Name / Company *</label><input class="fi" type="text" id="ec-name" placeholder="e.g. John Doe / ABC Corp"></div>
       <div class="fi-row">
@@ -221,7 +220,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
     </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('editClientModal')">Cancel</button>
-      <button class="btn btn-navy" onclick="saveClientInfo()">Save →</button>
+      <button class="btn btn-navy" onclick="saveClientInfo()">Save ?</button>
     </div>
   </div>
 </div>
@@ -229,7 +228,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- ADD / EDIT INVOICE MODAL -->
 <div class="modal-overlay" id="invoiceModal">
   <div class="modal" style="max-width:640px">
-    <div class="modal-hd"><h3 id="inv-modal-title">🧾 New Invoice</h3><button class="modal-close" onclick="closeModal('invoiceModal')">✕</button></div>
+    <div class="modal-hd"><h3 id="inv-modal-title">?? New Invoice</h3><button class="modal-close" onclick="closeModal('invoiceModal')">?</button></div>
     <div class="modal-body">
       <input type="hidden" id="inv-id">
       <div class="fi-info" id="inv-project-info">—</div>
@@ -267,7 +266,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
     </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('invoiceModal')">Cancel</button>
-      <button class="btn btn-navy" onclick="saveInvoice()">Save Invoice →</button>
+      <button class="btn btn-navy" onclick="saveInvoice()">Save Invoice ?</button>
     </div>
   </div>
 </div>
@@ -275,7 +274,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- ADD PAYMENT MODAL -->
 <div class="modal-overlay" id="paymentModal">
   <div class="modal" style="max-width:480px">
-    <div class="modal-hd"><h3>💰 Record Payment</h3><button class="modal-close" onclick="closeModal('paymentModal')">✕</button></div>
+    <div class="modal-hd"><h3>?? Record Payment</h3><button class="modal-close" onclick="closeModal('paymentModal')">?</button></div>
     <div class="modal-body">
       <input type="hidden" id="pay-inv-id">
       <div class="fi-info" id="pay-inv-info">—</div>
@@ -292,38 +291,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
     </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('paymentModal')">Cancel</button>
-      <button class="btn btn-green" onclick="savePayment()">💾 Save Payment</button>
-    </div>
-  </div>
-</div>
-
-<!-- EMAIL SETTINGS MODAL -->
-<div class="modal-overlay" id="emailSettingsModal">
-  <div class="modal" style="max-width:500px">
-    <div class="modal-hd"><h3>⚙ Email Settings (SMTP)</h3><button class="modal-close" onclick="closeModal('emailSettingsModal')">✕</button></div>
-    <div class="modal-body">
-      <div class="fi-info" style="line-height:1.8">
-        <strong>Setup:</strong><br>
-        1. Start the Livio backend on <strong>http://127.0.0.1:3001</strong><br>
-        2. Enter your SMTP settings below, or leave them blank if the backend already has them in <code>backend/.env</code><br>
-        3. Use an app password if your mail provider requires one
-      </div>
-      <div><label class="fi-lbl">Backend API Base</label><input class="fi" type="text" id="smtp-api-base" placeholder="http://127.0.0.1:3001/api"></div>
-      <div><label class="fi-lbl">SMTP Host</label><input class="fi" type="text" id="smtp-host" placeholder="smtp.gmail.com"></div>
-      <div class="fg">
-        <div><label class="fi-lbl">SMTP Port</label><input class="fi" type="number" id="smtp-port" placeholder="587"></div>
-        <div style="display:flex;align-items:end"><label class="fi-lbl" style="display:flex;align-items:center;gap:8px;margin:0 0 8px"><input type="checkbox" id="smtp-secure" style="accent-color:var(--blue)"> Use secure SMTP</label></div>
-      </div>
-      <div><label class="fi-lbl">SMTP Username</label><input class="fi" type="text" id="smtp-user" placeholder="yourname@company.com"></div>
-      <div><label class="fi-lbl">SMTP Password</label><input class="fi" type="password" id="smtp-pass" placeholder="App password or SMTP password"></div>
-      <div class="fg">
-        <div><label class="fi-lbl">From Name</label><input class="fi" type="text" id="smtp-from-name" placeholder="Livio Building Systems"></div>
-        <div><label class="fi-lbl">Reply-To Email</label><input class="fi" type="email" id="smtp-from-email" placeholder="billing@company.com"></div>
-      </div>
-    </div>
-    <div class="modal-ft">
-      <button class="btn btn-ghost" onclick="closeModal('emailSettingsModal')">Cancel</button>
-      <button class="btn btn-navy" onclick="saveEmailSettings()">Save →</button>
+      <button class="btn btn-green" onclick="savePayment()">?? Save Payment</button>
     </div>
   </div>
 </div>
@@ -331,7 +299,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- SEND INVOICE EMAIL MODAL -->
 <div class="modal-overlay" id="emailModal">
   <div class="modal" style="max-width:500px">
-    <div class="modal-hd"><h3 id="em-modal-title">✉ Send Invoice by Email</h3><button class="modal-close" onclick="closeModal('emailModal')">✕</button></div>
+    <div class="modal-hd"><h3 id="em-modal-title">? Send Invoice by Email</h3><button class="modal-close" onclick="closeModal('emailModal')">?</button></div>
     <div class="modal-body">
       <input type="hidden" id="em-type">
       <input type="hidden" id="em-ref-id">
@@ -342,12 +310,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
     </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('emailModal')">Cancel</button>
-      <button class="btn btn-navy" id="emailSendBtn" onclick="sendEmailJS()">✉ Send</button>
+      <button class="btn btn-navy" id="emailSendBtn" onclick="sendEmailJS()">? Send</button>
     </div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════ SCRIPT ══════════════════════════════════ -->
+<!-- ---------------------------------- SCRIPT ---------------------------------- -->
 <script>
 const LIVIO_KEY='livio_v1';
 function getHostApp(){
@@ -401,7 +369,7 @@ let payProofName='';
 let payProofData='';
 let lastInvoiceSig='';
 
-/* ── HELPERS ─────────────────────────────────────────────── */
+/* -- HELPERS ----------------------------------------------- */
 function getAllProjects(){return getLivioDB().projects||[]}
 function getProj(){return getAllProjects().find(x=>x.id===curProjectId)||null}
 function saveInvoices(){
@@ -429,7 +397,7 @@ function invBalance(inv){return(inv.total||0)-invPaid(inv)}
 function statusBadge(s){const m={paid:'b-paid',pending:'b-pending',overdue:'b-overdue',draft:'b-draft'};return`<span class="badge ${m[s]||'b-draft'}">${s}</span>`}
 function loadActiveProject(){const db=getLivioDB();curProjectId=db.activeId||(db.projects&&db.projects[0]?.id)||null}
 
-/* ── TOAST ───────────────────────────────────────────────── */
+/* -- TOAST ------------------------------------------------- */
 function showToast(msg,type='info',dur=3500){
   const c=document.getElementById('toast-container');
   const t=document.createElement('div');
@@ -437,41 +405,34 @@ function showToast(msg,type='info',dur=3500){
   setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},dur);
 }
 
-/* ── EMAIL SETTINGS ──────────────────────────────────────── */
-function getEmailConfig(){try{return JSON.parse(localStorage.getItem('livio_email_config')||'{}')}catch{return{}}}
-function getEmailApiBase(cfg){return ((cfg&&cfg.apiBase)||'http://127.0.0.1:3001/api').replace(/\/+$/,'')}
-function hasSmtpOverride(cfg){return !!(cfg&&cfg.host&&cfg.port&&cfg.user&&cfg.pass)}
+/* -- EMAIL DELIVERY ---------------------------------------- */
+function getEmailConfig(){return {}}
+function getEmailApiBase(){
+  const host=getHostApp();
+  try{
+    const hostApi=(host&&typeof host.getApiBase==='function')?host.getApiBase():(host&&host.__LIVIO_API_BASE)||'';
+    if(hostApi) return String(hostApi).replace(/\/+$/,'');
+  }catch{}
+  const isLocal=location.hostname==='127.0.0.1'||location.hostname==='localhost';
+  const fallback=isLocal?'http://127.0.0.1:3001/api':location.origin.replace(/\/+$/,'')+'/api';
+  return fallback.replace(/\/+$/,'');
+}
 function getEmailStatusHtml(){
-  const cfg=getEmailConfig();
-  const apiBase=getEmailApiBase(cfg);
-  if(hasSmtpOverride(cfg)){
-    return `<span style="color:var(--green)">✓ SMTP ready via backend</span><br><span style="font-size:10px;color:var(--muted)">Host: ${cfg.host} · Port: ${cfg.port} · API: ${apiBase}</span>`;
-  }
-  return `<span style="color:var(--amber)">⚠ Using backend SMTP defaults</span><br><span style="font-size:10px;color:var(--muted)">API: ${apiBase} · fill SMTP fields only if you want to override backend/.env</span>`;
+  const apiBase=getEmailApiBase();
+  return `<span style="color:var(--green)">✓ Using backend email service</span><br><span style="font-size:10px;color:var(--muted)">API: ${apiBase}</span>`;
 }
 function renderEmailSendStatus(){
   const el=document.getElementById('em-status');
   if(el)el.innerHTML=getEmailStatusHtml();
 }
 async function sendEmailThroughBackend(to,subject,message){
-  const cfg=getEmailConfig();
   const payload={
     to,
     subject,
     message,
-    fromName:(cfg.fromName||'Livio Building Systems'),
-    replyTo:(cfg.fromEmail||'')
+    fromName:'Livio Building Systems'
   };
-  if(hasSmtpOverride(cfg)){
-    payload.smtpOverride={
-      host:cfg.host,
-      port:Number(cfg.port||587),
-      secure:!!cfg.secure,
-      user:cfg.user,
-      pass:cfg.pass
-    };
-  }
-  const res=await fetch(getEmailApiBase(cfg)+'/email/send',{
+  const res=await fetch(getEmailApiBase()+'/email/send',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload)
@@ -480,38 +441,10 @@ async function sendEmailThroughBackend(to,subject,message){
   if(!res.ok) throw new Error(data.error||data.message||('SMTP send failed ('+res.status+')'));
   return data;
 }
-function openEmailSettings(){
-  const cfg=getEmailConfig();
-  document.getElementById('smtp-api-base').value=getEmailApiBase(cfg);
-  document.getElementById('smtp-host').value=cfg.host||'';
-  document.getElementById('smtp-port').value=cfg.port||'587';
-  document.getElementById('smtp-user').value=cfg.user||'';
-  document.getElementById('smtp-pass').value=cfg.pass||'';
-  document.getElementById('smtp-secure').checked=!!cfg.secure;
-  document.getElementById('smtp-from-name').value=cfg.fromName||'Livio Building Systems';
-  document.getElementById('smtp-from-email').value=cfg.fromEmail||'';
-  document.getElementById('emailSettingsModal').classList.add('open');
-}
-function saveEmailSettings(){
-  const cfg={
-    apiBase:document.getElementById('smtp-api-base').value.trim()||'http://127.0.0.1:3001/api',
-    host:document.getElementById('smtp-host').value.trim(),
-    port:document.getElementById('smtp-port').value.trim()||'587',
-    user:document.getElementById('smtp-user').value.trim(),
-    pass:document.getElementById('smtp-pass').value.trim(),
-    secure:document.getElementById('smtp-secure').checked,
-    fromName:document.getElementById('smtp-from-name').value.trim()||'Livio Building Systems',
-    fromEmail:document.getElementById('smtp-from-email').value.trim()
-  };
-  if((cfg.host||cfg.user||cfg.pass)&&(!cfg.host||!cfg.port||!cfg.user||!cfg.pass)){showToast('Fill all SMTP fields or leave them all blank.','error');return;}
-  localStorage.setItem('livio_email_config',JSON.stringify(cfg));
-  closeModal('emailSettingsModal');renderEmailSendStatus();showToast('✅ SMTP settings saved!','success');
-}
-
-/* ── MODAL HELPERS ───────────────────────────────────────── */
+/* -- MODAL HELPERS ----------------------------------------- */
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 
-/* ── RENDER LEDGER STRIP ─────────────────────────────────── */
+/* -- RENDER LEDGER STRIP ----------------------------------- */
 function renderLedgerStrip(invs){
   const strip=document.getElementById('ledgerStrip');
   const totalInvoiced=invs.reduce((s,x)=>s+(x.total||0),0);
@@ -533,13 +466,13 @@ function renderLedgerStrip(invs){
       <div class="ls-val ${balanceDue>0.001?'amber':''}">${fmtM(balanceDue)}</div>
     </div>
     <div class="ls-actions">
-      <button class="btn btn-white btn-sm" onclick="downloadLedgerPDF()">⬇ PDF Ledger</button>
-      <button class="btn btn-white btn-sm" onclick="downloadLedgerExcel()">📊 Excel Ledger</button>
-      <button class="btn btn-white btn-sm" onclick="openSendLedgerEmail()">✉ Send Ledger</button>
+      <button class="btn btn-white btn-sm" onclick="downloadLedgerPDF()">? PDF Ledger</button>
+      <button class="btn btn-white btn-sm" onclick="downloadLedgerExcel()">?? Excel Ledger</button>
+      <button class="btn btn-white btn-sm" onclick="openSendLedgerEmail()">? Send Ledger</button>
     </div>`;
 }
 
-/* ── MAIN RENDER ─────────────────────────────────────────── */
+/* -- MAIN RENDER ------------------------------------------- */
 function renderMain(){
   const main=document.getElementById('mainArea');
   const p=getProj();
@@ -570,7 +503,7 @@ function renderMain(){
   <div class="proj-panel">
     <div class="proj-hd">
       <div>
-        <div class="proj-hd-title">📁 ${esc(p.name)}</div>
+        <div class="proj-hd-title">?? ${esc(p.name)}</div>
         <div class="proj-hd-sub">${esc(p.address||p.city||'')}</div>
       </div>
       <span style="background:rgba(255,255,255,.12);color:#8AAAC8;font-size:10px;padding:3px 10px;border-radius:4px;font-weight:700">${invs.length} INVOICE${invs.length!==1?'S':''}</span>
@@ -582,15 +515,15 @@ function renderMain(){
       ${p.clientAddr?`<div style="grid-column:span 2"><div class="dc-lbl">Address</div><div class="dc-val" style="font-size:12px">${esc(p.clientAddr)}</div></div>`:''}
     </div>
     <div class="proj-ft">
-      ${!p.client?`<span style="font-size:11px;color:var(--amber);font-weight:600">⚠ No client info — add it in project settings</span>`:`<span style="font-size:11px;color:var(--green);font-weight:600">✓ ${esc(p.client)}</span>`}
-      <button class="btn btn-ghost btn-sm" onclick="openEditClientInfo()">✏ Edit Client Info</button>
+      ${!p.client?`<span style="font-size:11px;color:var(--amber);font-weight:600">? No client info — add it in project settings</span>`:`<span style="font-size:11px;color:var(--green);font-weight:600">? ${esc(p.client)}</span>`}
+      <button class="btn btn-ghost btn-sm" onclick="openEditClientInfo()">? Edit Client Info</button>
     </div>
   </div>
 
   ${cardsHtml}`;
 }
 
-/* ── RENDER INVOICE CARD ─────────────────────────────────── */
+/* -- RENDER INVOICE CARD ----------------------------------- */
 function renderInvoiceCard(inv,p){
   const paid=invPaid(inv);
   const balance=invBalance(inv);
@@ -601,20 +534,20 @@ function renderInvoiceCard(inv,p){
   let payRows='';
   pays.forEach(pay=>{
     const proofHtml=pay.proofName
-      ?`<a class="proof-chip" href="#" onclick="viewProof('${esc(inv.id)}','${esc(pay.id)}');return false">📎 ${esc(pay.proofName)}</a>`
+      ?`<a class="proof-chip" href="#" onclick="viewProof('${esc(inv.id)}','${esc(pay.id)}');return false">?? ${esc(pay.proofName)}</a>`
       :`<span style="color:var(--muted);font-size:10px">—</span>`;
     payRows+=`<tr>
       <td>${fmtD(pay.date)}</td>
       <td>${fmtM(pay.amount)}</td>
       <td style="color:var(--muted)">${esc(pay.note||'—')}</td>
       <td>${proofHtml}</td>
-      <td><button class="btn btn-xs btn-red" onclick="deletePayment('${esc(inv.id)}','${esc(pay.id)}')">🗑</button></td>
+      <td><button class="btn btn-xs btn-red" onclick="deletePayment('${esc(inv.id)}','${esc(pay.id)}')">??</button></td>
     </tr>`;
   });
 
   const paySection=pays.length?`
   <div class="pay-hist">
-    <div class="pay-hist-title">💳 Payment History (${pays.length} record${pays.length!==1?'s':''})</div>
+    <div class="pay-hist-title">?? Payment History (${pays.length} record${pays.length!==1?'s':''})</div>
     <table class="pay-table">
       <thead><tr><th>Date</th><th>Amount</th><th>Reference</th><th>Proof</th><th></th></tr></thead>
       <tbody>${payRows}</tbody>
@@ -683,20 +616,20 @@ function renderInvoiceCard(inv,p){
     </div>
 
     <div class="inv-actions">
-      <button class="btn btn-blue btn-sm" onclick="generateInvoicePDF('${inv.id}')">⬇ PDF</button>
-      <button class="btn btn-green btn-sm" onclick="openSendInvoiceEmail('${inv.id}')">✉ Send Email</button>
-      <button class="btn btn-amber btn-sm" onclick="openAddPayment('${inv.id}')">💰 Add Payment</button>
-      <button class="btn btn-ghost btn-sm" onclick="openEditInvoice('${inv.id}')">✏ Edit</button>
-      <button class="btn btn-red btn-sm" style="margin-left:auto" onclick="deleteInvoice('${inv.id}')">🗑 Delete</button>
+      <button class="btn btn-blue btn-sm" onclick="generateInvoicePDF('${inv.id}')">? PDF</button>
+      <button class="btn btn-green btn-sm" onclick="openSendInvoiceEmail('${inv.id}')">? Send Email</button>
+      <button class="btn btn-amber btn-sm" onclick="openAddPayment('${inv.id}')">?? Add Payment</button>
+      <button class="btn btn-ghost btn-sm" onclick="openEditInvoice('${inv.id}')">? Edit</button>
+      <button class="btn btn-red btn-sm" style="margin-left:auto" onclick="deleteInvoice('${inv.id}')">?? Delete</button>
     </div>
   </div>`;
 }
 
-/* ── INVOICE MODAL ───────────────────────────────────────── */
+/* -- INVOICE MODAL ----------------------------------------- */
 function openAddInvoice(){
   editInvId=null;
   lineItems=[{desc:'',qty:1,price:0}];
-  document.getElementById('inv-modal-title').textContent='🧾 New Invoice';
+  document.getElementById('inv-modal-title').textContent='?? New Invoice';
   document.getElementById('inv-id').value='';
   const p=getProj();
   const today=new Date().toISOString().slice(0,10);
@@ -723,7 +656,7 @@ function openEditInvoice(id){
   editInvId=id;
   lineItems=(inv.lines||[]).map(l=>({...l}));
   if(!lineItems.length)lineItems=[{desc:'',qty:1,price:0}];
-  document.getElementById('inv-modal-title').textContent='✏ Edit Invoice';
+  document.getElementById('inv-modal-title').textContent='? Edit Invoice';
   document.getElementById('inv-id').value=inv.id;
   const p=getProj();
   document.getElementById('inv-num').value=inv.num||'';
@@ -748,7 +681,7 @@ function renderLineItems(){
     <td><input type="number" value="${l.qty||1}" min="1" style="width:60px" oninput="lineItems[${i}].qty=parseFloat(this.value)||1;updateModalTotals()"></td>
     <td><input type="number" value="${l.price||0}" min="0" step="0.01" oninput="lineItems[${i}].price=parseFloat(this.value)||0;updateModalTotals()"></td>
     <td class="line-total">${fmtM((l.qty||1)*(l.price||0))}</td>
-    <td><button type="button" class="rm-row" onclick="removeLine(${i})">✕</button></td>
+    <td><button type="button" class="rm-row" onclick="removeLine(${i})">?</button></td>
   </tr>`).join('');
   updateModalTotals();
 }
@@ -801,10 +734,10 @@ function saveInvoice(){
   if(editInvId){
     const idx=invoices.findIndex(x=>x.id===editInvId);
     if(idx>=0){data.payments=invoices[idx].payments||[];invoices[idx]=data;}
-    showToast('✅ Invoice updated.','success');
+    showToast('? Invoice updated.','success');
   } else {
     invoices.push(data);
-    showToast('✅ Invoice created!','success');
+    showToast('? Invoice created!','success');
   }
   saveInvoices();
   closeModal('invoiceModal');
@@ -819,7 +752,7 @@ function deleteInvoice(id){
   renderMain();
 }
 
-/* ── PAYMENT MODAL ───────────────────────────────────────── */
+/* -- PAYMENT MODAL ----------------------------------------- */
 function openAddPayment(invId){
   const inv=invoices.find(x=>x.id===invId);
   if(!inv)return;
@@ -844,7 +777,7 @@ function handleProofFile(input){
   const reader=new FileReader();
   reader.onload=e=>{
     payProofData=e.target.result;
-    document.getElementById('pay-proof-preview').innerHTML=`<span style="font-size:11px;color:var(--green);font-weight:600">✓ ${esc(file.name)} (${(file.size/1024).toFixed(1)} KB)</span>`;
+    document.getElementById('pay-proof-preview').innerHTML=`<span style="font-size:11px;color:var(--green);font-weight:600">? ${esc(file.name)} (${(file.size/1024).toFixed(1)} KB)</span>`;
   };
   reader.readAsDataURL(file);
 }
@@ -865,9 +798,9 @@ function savePayment(){
   const paid=invPaid(invoices[idx]);
   if(paid>=invoices[idx].total-0.01&&invoices[idx].status!=='paid'){
     invoices[idx].status='paid';
-    showToast('✅ Payment recorded. Invoice marked as PAID!','success',4500);
+    showToast('? Payment recorded. Invoice marked as PAID!','success',4500);
   } else {
-    showToast('✅ Payment of '+fmtM(amount)+' recorded!','success');
+    showToast('? Payment of '+fmtM(amount)+' recorded!','success');
   }
   saveInvoices();
   closeModal('paymentModal');
@@ -895,7 +828,7 @@ function viewProof(invId,payId){
   </body></html>`);
 }
 
-/* ── EDIT CLIENT INFO ────────────────────────────────────── */
+/* -- EDIT CLIENT INFO -------------------------------------- */
 function openEditClientInfo(){
   const p=getProj();
   if(!p)return;
@@ -917,11 +850,11 @@ function saveClientInfo(){
   db.projects[idx].clientAddr=document.getElementById('ec-addr').value.trim();
   localStorage.setItem(LIVIO_KEY,JSON.stringify(db));
   closeModal('editClientModal');
-  showToast('✅ Client info saved!','success');
+  showToast('? Client info saved!','success');
   renderMain();
 }
 
-/* ── GENERATE INVOICE PDF ────────────────────────────────── */
+/* -- GENERATE INVOICE PDF ---------------------------------- */
 function generateInvoicePDF(invId){
   const inv=invoices.find(x=>x.id===invId);
   if(!inv){showToast('Invoice not found.','error');return;}
@@ -934,7 +867,7 @@ function generateInvoicePDF(invId){
   const ML=40,MR=40;
   const CW=W-ML-MR;
 
-  // ── Blue header bar
+  // -- Blue header bar
   doc.setFillColor(26,107,196);
   doc.rect(0,0,W,72,'F');
 
@@ -958,7 +891,7 @@ function generateInvoicePDF(invId){
 
   let y=90;
 
-  // ── Two-column info box
+  // -- Two-column info box
   const boxH=88;
   const boxMid=ML+CW/2;
   doc.setDrawColor(210,210,210);
@@ -1008,7 +941,7 @@ function generateInvoicePDF(invId){
 
   y+=boxH+16;
 
-  // ── Line items table
+  // -- Line items table
   const heads=[['Description','Qty','Unit Price','Amount']];
   const rows=(inv.lines||[]).map(l=>[
     l.desc||'',
@@ -1036,7 +969,7 @@ function generateInvoicePDF(invId){
 
   y=doc.lastAutoTable.finalY+8;
 
-  // ── Totals
+  // -- Totals
   const rightEdge=W-MR;
   const lblStart=W-MR-160;
 
@@ -1076,7 +1009,7 @@ function generateInvoicePDF(invId){
 
   y+=10;
 
-  // ── Billing Detail
+  // -- Billing Detail
   if(inv.notes){
     doc.setFont('helvetica','bold');
     doc.setFontSize(10);
@@ -1094,7 +1027,7 @@ function generateInvoicePDF(invId){
     y+=noteLines.length*13+12;
   }
 
-  // ── Payment Terms
+  // -- Payment Terms
   if(inv.paymentTerms){
     doc.setFont('helvetica','bold');
     doc.setFontSize(10);
@@ -1112,7 +1045,7 @@ function generateInvoicePDF(invId){
     y+=ptLines.length*13+12;
   }
 
-  // ── Payment History (if any)
+  // -- Payment History (if any)
   if(pays.length){
     doc.setFont('helvetica','bold');
     doc.setFontSize(10);
@@ -1135,7 +1068,7 @@ function generateInvoicePDF(invId){
     y=doc.lastAutoTable.finalY+16;
   }
 
-  // ── Footer
+  // -- Footer
   const ftY=Math.max(y+20,H-60);
   doc.setDrawColor(26,107,196);
   doc.setLineWidth(1.5);
@@ -1150,10 +1083,10 @@ function generateInvoicePDF(invId){
   doc.text('Livio Building Systems · Licensed Contractor · All Rights Reserved',W/2,ftY+35,{align:'center'});
 
   doc.save(`${inv.num||'Invoice'}.pdf`);
-  showToast(`✅ ${inv.num}.pdf downloaded!`,'success');
+  showToast(`? ${inv.num}.pdf downloaded!`,'success');
 }
 
-/* ── DOWNLOAD LEDGER PDF ─────────────────────────────────── */
+/* -- DOWNLOAD LEDGER PDF ----------------------------------- */
 function downloadLedgerPDF(){
   const p=getProj();
   if(!p){showToast('No active project.','error');return;}
@@ -1268,10 +1201,10 @@ function downloadLedgerPDF(){
   doc.text('Livio Building Systems · Licensed Contractor · All Rights Reserved',W/2,pageH-12,{align:'center'});
 
   doc.save(`Payment-Ledger-${p.name.replace(/\s+/g,'_')}.pdf`);
-  showToast('✅ Ledger PDF downloaded!','success');
+  showToast('? Ledger PDF downloaded!','success');
 }
 
-/* ── DOWNLOAD LEDGER EXCEL ───────────────────────────────── */
+/* -- DOWNLOAD LEDGER EXCEL --------------------------------- */
 function downloadLedgerExcel(){
   if(!window.XLSX){showToast('Excel library not loaded.','error');return;}
   const p=getProj();
@@ -1333,10 +1266,10 @@ function downloadLedgerExcel(){
   XLSX.utils.book_append_sheet(wb,ws2,'Payment Records');
 
   XLSX.writeFile(wb,`Payment-Ledger-${p.name.replace(/\s+/g,'_')}.xlsx`);
-  showToast('✅ Ledger Excel downloaded!','success');
+  showToast('? Ledger Excel downloaded!','success');
 }
 
-/* ── SEND LEDGER EMAIL ───────────────────────────────────── */
+/* -- SEND LEDGER EMAIL ------------------------------------- */
 function openSendLedgerEmail(){
   const p=getProj();
   if(!p){showToast('No active project.','error');return;}
@@ -1345,26 +1278,26 @@ function openSendLedgerEmail(){
   const totalReceived=invs.reduce((s,x)=>s+invPaid(x),0);
   const balanceDue=totalInvoiced-totalReceived;
 
-  let body=`PAYMENT LEDGER — ${p.name}\n${'─'.repeat(50)}\n`;
+  let body=`PAYMENT LEDGER — ${p.name}\n${'-'.repeat(50)}\n`;
   body+=`Client: ${p.client||'—'}\n`;
   if(p.clientAddr)body+=`Address: ${p.clientAddr}\n`;
   body+=`\nSUMMARY\n`;
   body+=`Total Invoiced:  ${fmtM(totalInvoiced)}\n`;
   body+=`Total Received:  ${fmtM(totalReceived)}\n`;
   body+=`Balance Due:     ${fmtM(balanceDue)}\n`;
-  body+=`\nINVOICE DETAILS\n${'─'.repeat(50)}\n`;
+  body+=`\nINVOICE DETAILS\n${'-'.repeat(50)}\n`;
   invs.forEach(inv=>{
     const pd=invPaid(inv);
     const bl=invBalance(inv);
     body+=`\n${inv.num}  |  ${(inv.status||'').toUpperCase()}  |  Due: ${fmtD(inv.due)}\n`;
     body+=`  Invoice Total: ${fmtM(inv.total)}  |  Paid: ${fmtM(pd)}  |  Balance: ${fmtM(bl)}\n`;
     (inv.payments||[]).forEach(pay=>{
-      body+=`    ✓ ${fmtD(pay.date)}: ${fmtM(pay.amount)}${pay.note?' ('+pay.note+')':''}\n`;
+      body+=`    ? ${fmtD(pay.date)}: ${fmtM(pay.amount)}${pay.note?' ('+pay.note+')':''}\n`;
     });
   });
-  body+=`\n${'─'.repeat(50)}\nThank you for your business!\nLivio Building Systems`;
+  body+=`\n${'-'.repeat(50)}\nThank you for your business!\nLivio Building Systems`;
 
-  document.getElementById('em-modal-title').textContent='✉ Send Payment Ledger';
+  document.getElementById('em-modal-title').textContent='? Send Payment Ledger';
   document.getElementById('em-type').value='ledger';
   document.getElementById('em-ref-id').value='';
   document.getElementById('em-to').value=p.clientEmail||'';
@@ -1374,7 +1307,7 @@ function openSendLedgerEmail(){
   document.getElementById('emailModal').classList.add('open');
 }
 
-/* ── SEND INVOICE EMAIL ──────────────────────────────────── */
+/* -- SEND INVOICE EMAIL ------------------------------------ */
 function openSendInvoiceEmail(invId){
   const inv=invoices.find(x=>x.id===invId);
   if(!inv){showToast('Invoice not found.','error');return;}
@@ -1382,12 +1315,12 @@ function openSendInvoiceEmail(invId){
   const paid=invPaid(inv);
   const bal=invBalance(inv);
   let body=`Dear ${p?.client||'Client'},\n\nPlease find below your invoice details from Livio Building Systems.\n\n`;
-  body+=`INVOICE: ${inv.num}\n${'─'.repeat(40)}\n`;
+  body+=`INVOICE: ${inv.num}\n${'-'.repeat(40)}\n`;
   body+=`Project:    ${inv.project||p?.name||'—'}\n`;
   body+=`Issue Date: ${fmtD(inv.date)}\n`;
   body+=`Due Date:   ${fmtD(inv.due)}\n`;
   body+=`Status:     ${(inv.status||'pending').toUpperCase()}\n\n`;
-  body+=`LINE ITEMS\n${'─'.repeat(40)}\n`;
+  body+=`LINE ITEMS\n${'-'.repeat(40)}\n`;
   (inv.lines||[]).forEach(l=>{body+=`${l.desc} × ${l.qty}  —  ${fmtM(l.price)} ea.  =  ${fmtM(l.qty*l.price)}\n`;});
   body+=`\nSubtotal:   ${fmtM(inv.subtotal)}\n`;
   if(inv.tax)body+=`Tax (${inv.tax}%): ${fmtM((inv.subtotal||0)*(inv.tax||0)/100)}\n`;
@@ -1399,7 +1332,7 @@ function openSendInvoiceEmail(invId){
   if(inv.paymentTerms)body+=`\nPayment Terms:\n${inv.paymentTerms}\n`;
   body+=`\nThank you for your business!\nLivio Building Systems`;
 
-  document.getElementById('em-modal-title').textContent=`✉ Send Invoice ${inv.num}`;
+  document.getElementById('em-modal-title').textContent=`? Send Invoice ${inv.num}`;
   document.getElementById('em-type').value='invoice';
   document.getElementById('em-ref-id').value=invId;
   document.getElementById('em-to').value=p?.clientEmail||'';
@@ -1409,7 +1342,7 @@ function openSendInvoiceEmail(invId){
   document.getElementById('emailModal').classList.add('open');
 }
 
-/* ── SEND VIA BACKEND SMTP ───────────────────────────────── */
+/* -- SEND VIA BACKEND SMTP --------------------------------- */
 function sendEmailJS(){
   const to=document.getElementById('em-to').value.trim();
   const subject=document.getElementById('em-subject').value.trim();
@@ -1420,16 +1353,16 @@ function sendEmailJS(){
   btn.disabled=true;
   sendEmailThroughBackend(to,subject,body)
     .then(()=>{
-      showToast('✅ Email sent successfully via SMTP!','success',4500);
+      showToast('? Email sent successfully via SMTP!','success',4500);
       closeModal('emailModal');
     })
     .catch(err=>{
-      showToast('❌ SMTP email failed: '+(err.message||JSON.stringify(err)),'error',6000);
+      showToast('? SMTP email failed: '+(err.message||JSON.stringify(err)),'error',6000);
     })
-    .finally(()=>{btn.innerHTML='✉ Send';btn.disabled=false;});
+    .finally(()=>{btn.innerHTML='? Send';btn.disabled=false;});
 }
 
-/* ── SYNC FROM PARENT (iframe) ───────────────────────────── */
+/* -- SYNC FROM PARENT (iframe) ----------------------------- */
 const originalGenerateInvoicePDF = generateInvoicePDF;
 generateInvoicePDF = function(invId){
   if(!window.jspdf||!window.jspdf.jsPDF){
@@ -1457,7 +1390,7 @@ function syncActiveProject(){
 }
 window.syncActiveProject=syncActiveProject;
 
-/* ── INIT ────────────────────────────────────────────────── */
+/* -- INIT -------------------------------------------------- */
 syncActiveProject();
 
 // Polling fallback
@@ -1476,3 +1409,6 @@ setInterval(()=>{
 </script>
 </body>
 </html>
+
+
+
