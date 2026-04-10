@@ -1426,7 +1426,7 @@ function renderExport(){
 // ══════════════════════════════════════════════════════════════════
 //  MODAL SYSTEM
 // ══════════════════════════════════════════════════════════════════
-let mMode=null, mId=null, mPending=[];
+let mMode=null, mId=null, mPending=[], uploadInFlight=0;
 
 function openModal(type, id=null){
   mMode=type; mId=id; mPending=[];
@@ -2153,8 +2153,10 @@ function dropZoneHTML(listId, placeholder){
   return`<label class="drop-zone" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'${listId}',this)">
     <div style="font-size:24px;margin-bottom:4px">📎</div>
     <div class="drop-zone-txt">${placeholder}</div>
+    <div style="font-size:11px;color:var(--blue);font-weight:600;margin-top:6px">Click to choose files or drag them here</div>
     <input type="file" multiple style="display:none" onchange="handleFileInput(this,'${listId}')">
   </label>
+  <div id="upload-status-${listId}" style="font-size:11px;color:var(--muted);margin-top:8px;min-height:16px"></div>
   <div class="attach-list" id="al-${listId}"></div>`;
 }
 
@@ -2167,6 +2169,12 @@ function renderPendingInModal(){
   ['qfiles','insfiles','payproof','payinvoice','lienwvr','invfiles','invlien','invproof','ppfiles','venfiles','qafiles','chkfiles','plan-files'].forEach(lid=>{
     const el=vEl('al-'+lid);
     if(el) el.innerHTML=mPending.map(f=>aItemHTML(f)).join('');
+    const status=vEl('upload-status-'+lid);
+    if(status){
+      if(uploadInFlight>0) status.textContent='Uploading '+uploadInFlight+' file'+(uploadInFlight>1?'s':'')+'...';
+      else if(mPending.length) status.textContent=mPending.length+' file'+(mPending.length>1?'s':'')+' ready to save';
+      else status.textContent='';
+    }
   });
 }
 
@@ -2206,7 +2214,7 @@ function removePending(fid){
 function closeModal(){
   // Restore modal footer
   const mf=document.querySelector('.modal-foot');
-  if(mf)mf.style.display=''; vEl('mo').classList.remove('open'); mPending=[]; }
+  if(mf)mf.style.display=''; vEl('mo').classList.remove('open'); mPending=[]; uploadInFlight=0; }
 
 function isViewer(){
   const cu=currentUser();
@@ -2214,6 +2222,7 @@ function isViewer(){
 }
 
 function saveModal(){
+  if(uploadInFlight>0){toast('⏳ Please wait for file upload to finish');return;}
   if(isViewer()){toast('⚠ Viewers have read-only access');return;}
   if(curPage&&isPageReadOnly(curPage)){toast('⚠ You have View Only access to this page');return;}
   const p=proj();
@@ -4097,7 +4106,7 @@ async function syncRemoteDB(){
     syncInFlight=false;
   }
 }
-function queueRemoteSync(delay=700){
+function queueRemoteSync(delay=150){
   clearTimeout(syncTimer);
   syncTimer=setTimeout(()=>{syncRemoteDB();},delay);
 }
@@ -4152,6 +4161,8 @@ handleFileInput = async function(input, listId){
     return true;
   });
   if(!valid.length) return;
+  uploadInFlight+=valid.length;
+  renderPendingInModal();
   try{
     const uploaded=await uploadFilesToServer(valid, getUploadProjectId());
     uploaded.forEach(f=>{
@@ -4164,6 +4175,8 @@ handleFileInput = async function(input, listId){
     toast('âš  Upload failed: '+(e?.message||'Please try again'));
     console.error('File upload failed:',e);
   }finally{
+    uploadInFlight=Math.max(0, uploadInFlight-valid.length);
+    renderPendingInModal();
     if(input&&typeof input.value==='string') input.value='';
   }
 };
