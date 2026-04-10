@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Client Contracts</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0C1B2E;--navy2:#162438;--navy3:#1E3350;
+  --blue:#1A6BC4;--blue-l:#E8F2FC;
+  --green:#2D6A0F;--green-l:#ECF5E3;
+  --amber:#A86200;--amber-l:#FEF3E2;
+  --red:#9B1F1F;--red-l:#FDEAEA;
+  --gray-l:#F4F3EF;
+  --border:#E0DDD5;--muted:#777672;--text:#1A1917;--bg:#F7F6F2;
+  --sh:0 1px 8px rgba(0,0,0,.07);--sh2:0 4px 20px rgba(0,0,0,.13);
+}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:10px}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:var(--sh)}
+.tb-title{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;letter-spacing:.3px}
+.tb-right{display:flex;gap:8px;align-items:center}
+.main{overflow-y:auto;padding:22px 24px;min-height:calc(100vh - 54px)}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.sh-title{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;letter-spacing:.2px}
+.sh-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.panel{background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--sh);margin-bottom:14px;overflow:hidden}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--navy)}
+.ph-title{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:#fff;letter-spacing:.4px}
+.ph-sub{font-size:11px;color:#8AAAC8;margin-top:1px}
+.detail-grid{padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.dc-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.dc-val{font-size:13px;font-weight:600;color:var(--text)}
+.dc-val.money{font-family:'Barlow Condensed',sans-serif;font-size:16px;color:var(--navy)}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.2px}
+.b-active{background:var(--green-l);color:var(--green)}
+.b-signed{background:var(--blue-l);color:var(--blue)}
+.b-draft{background:var(--gray-l);color:var(--muted)}
+.b-expired{background:var(--red-l);color:var(--red)}
+.ct-actions{padding:12px 16px;border-top:1px solid var(--border);background:#fff;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'Barlow',sans-serif;transition:.13s;white-space:nowrap}
+.btn-navy{background:var(--navy);color:#fff}.btn-navy:hover{background:var(--navy3)}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{background:var(--gray-l)}
+.btn-green{background:var(--green-l);color:var(--green);border:1px solid #B8DCA0}.btn-green:hover{background:#DDF2C8}
+.btn-blue{background:var(--blue-l);color:var(--blue);border:1px solid #B0D0F0}.btn-blue:hover{background:#cce0f7}
+.btn-amber{background:var(--amber-l);color:var(--amber);border:1px solid #F5D9A0}.btn-amber:hover{background:#FEEAD0}
+.btn-red{background:var(--red-l);color:var(--red);border:1px solid #F5C0C0}.btn-red:hover{background:#FBD5D5}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:5px}
+.btn-xs{padding:3px 8px;font-size:10px;border-radius:4px}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center}
+.empty-ic{font-family:'Barlow Condensed',sans-serif;font-size:48px;font-weight:700;color:#D8D5CE;margin-bottom:12px;letter-spacing:2px}
+.empty p{font-size:13px;color:var(--muted);max-width:300px;line-height:1.6}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:540px;box-shadow:var(--sh2);overflow:hidden;max-height:94vh;display:flex;flex-direction:column}
+.modal-hd{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-hd h3{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700}
+.modal-close{background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.modal-body{padding:18px 22px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px}
+.modal-ft{padding:12px 22px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;align-items:center}
+.fi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:4px}
+.fi{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 11px;font-size:13px;font-family:'Barlow',sans-serif;background:#fff;outline:none;transition:border-color .15s;color:var(--text)}
+.fi:focus{border-color:var(--blue)}
+.fi-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fi-info{background:var(--blue-l);border:1px solid #B0D0F0;border-radius:6px;padding:8px 12px;font-size:12px;color:var(--blue);font-weight:600}
+/* Toast */
+#toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.2);animation:toastIn .2s ease;max-width:320px}
+.toast.success{background:#2D6A0F}
+.toast.error{background:#9B1F1F}
+.toast.info{background:#1A6BC4}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="tb-title">📄 Client Contracts</div>
+  <div class="tb-right">
+    <button class="btn btn-ghost btn-sm" onclick="openEmailSettings()">⚙ Email Settings</button>
+    <button class="btn btn-ghost btn-sm" onclick="openAddContract()">+ Add Contract</button>
+  </div>
+</div>
+
+<div class="main" id="mainArea">
+  <div class="empty"><div class="empty-ic">CC</div><p>Loading project…</p></div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- EDIT CLIENT INFO MODAL -->
+<div class="modal-overlay" id="editClientModal">
+  <div class="modal">
+    <div class="modal-hd"><h3>👤 Edit Client Info</h3><button class="modal-close" onclick="closeModal('editClientModal')">✕</button></div>
+    <div class="modal-body">
+      <div><label class="fi-lbl">Full Name / Company *</label><input class="fi" type="text" id="ec-name" placeholder="e.g. John Doe / ABC Corp"></div>
+      <div class="fi-row">
+        <div><label class="fi-lbl">Phone</label><input class="fi" type="text" id="ec-phone" placeholder="+1 555 000 1234"></div>
+        <div><label class="fi-lbl">Email</label><input class="fi" type="email" id="ec-email" placeholder="client@example.com"></div>
+      </div>
+      <div><label class="fi-lbl">Address</label><input class="fi" type="text" id="ec-addr" placeholder="123 Main St, City, State"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('editClientModal')">Cancel</button>
+      <button class="btn btn-navy" onclick="saveClientInfo()">Save →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD / EDIT CONTRACT MODAL -->
+<div class="modal-overlay" id="contractModal">
+  <div class="modal">
+    <div class="modal-hd"><h3 id="ct-modal-title">📄 Add Contract</h3><button class="modal-close" onclick="closeModal('contractModal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="ct-id">
+      <div class="fi-info" id="ct-project-info">—</div>
+      <div class="fi-row">
+        <div><label class="fi-lbl">Project Name</label><input class="fi" type="text" id="ct-project" readonly style="background:var(--bg)"></div>
+        <div><label class="fi-lbl">Contract #</label><input class="fi" type="text" id="ct-num" placeholder="CC-2026-001"></div>
+      </div>
+      <div class="fi-row">
+        <div><label class="fi-lbl">Contract Amount ($)</label><input class="fi" type="number" id="ct-amount" placeholder="50000"></div>
+        <div><label class="fi-lbl">Contract Type</label>
+          <select class="fi" id="ct-type">
+            <option>Fixed Price</option><option>Cost Plus</option><option>Time & Materials</option><option>Unit Price</option>
+          </select>
+        </div>
+      </div>
+      <div class="fi-row">
+        <div><label class="fi-lbl">Contract Date</label><input class="fi" type="date" id="ct-date"></div>
+        <div><label class="fi-lbl">Completion Date</label><input class="fi" type="date" id="ct-end"></div>
+      </div>
+      <div><label class="fi-lbl">Status</label>
+        <select class="fi" id="ct-status">
+          <option value="draft">Draft</option><option value="active">Active</option><option value="signed">Signed</option><option value="expired">Expired</option>
+        </select>
+      </div>
+      <div><label class="fi-lbl">Scope of Work</label><textarea class="fi" id="ct-scope" rows="3" placeholder="Describe the work to be performed…"></textarea></div>
+      <div><label class="fi-lbl">Payment Terms</label><textarea class="fi" id="ct-terms" rows="2" placeholder="e.g. 30% upfront, 40% at milestone, 30% on completion"></textarea></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('contractModal')">Cancel</button>
+      <button class="btn btn-navy" onclick="saveContract()">Save Contract →</button>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL SETTINGS MODAL -->
+<div class="modal-overlay" id="emailSettingsModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-hd"><h3>⚙ Email Settings (EmailJS)</h3><button class="modal-close" onclick="closeModal('emailSettingsModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="fi-info" style="line-height:1.7">
+        <strong>Setup instructions:</strong><br>
+        1. Sign up free at <strong>emailjs.com</strong><br>
+        2. Add an email service (Gmail, Outlook, etc.)<br>
+        3. Create an email template with variables:<br>
+        &nbsp;&nbsp;<code>{{to_email}}</code> &nbsp;<code>{{subject}}</code> &nbsp;<code>{{message}}</code> &nbsp;<code>{{from_name}}</code><br>
+        4. Copy your Public Key, Service ID, and Template ID below.
+      </div>
+      <div><label class="fi-lbl">EmailJS Public Key</label><input class="fi" type="text" id="ejs-key" placeholder="user_xxxxxxxxxx"></div>
+      <div><label class="fi-lbl">Service ID</label><input class="fi" type="text" id="ejs-service" placeholder="service_xxxxxxx"></div>
+      <div><label class="fi-lbl">Template ID</label><input class="fi" type="text" id="ejs-template" placeholder="template_xxxxxxx"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('emailSettingsModal')">Cancel</button>
+      <button class="btn btn-navy" onclick="saveEmailSettings()">Save Settings →</button>
+    </div>
+  </div>
+</div>
+
+<!-- SEND FOR SIGNING MODAL -->
+<div class="modal-overlay" id="signModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-hd"><h3>✍ Send Contract for Signing</h3><button class="modal-close" onclick="closeModal('signModal')">✕</button></div>
+    <div class="modal-body">
+      <div><label class="fi-lbl">Recipient Email</label><input class="fi" type="email" id="sg-to" placeholder="client@example.com"></div>
+      <div><label class="fi-lbl">Subject</label><input class="fi" type="text" id="sg-subject"></div>
+      <div><label class="fi-lbl">Email Message</label><textarea class="fi" id="sg-body" rows="14" style="font-size:11px;font-family:monospace"></textarea></div>
+      <div style="background:var(--amber-l);border:1px solid #F5D9A0;border-radius:6px;padding:10px 12px;font-size:11px;color:var(--amber)">
+        <strong>How it works:</strong> The full contract is sent directly to your client via EmailJS. Your client replies with <strong>"I AGREE – [their name] – [date]"</strong> to confirm acceptance. Then update the status to <strong>Signed</strong>.
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('signModal')">Cancel</button>
+      <button class="btn btn-amber" id="signSendBtn" onclick="sendForSigning()">✍ Send for Signing</button>
+    </div>
+  </div>
+</div>
+
+<!-- SEND EMAIL MODAL -->
+<div class="modal-overlay" id="emailModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-hd"><h3>✉ Send Contract by Email</h3><button class="modal-close" onclick="closeModal('emailModal')">✕</button></div>
+    <div class="modal-body">
+      <div><label class="fi-lbl">Recipient Email</label><input class="fi" type="email" id="em-to" placeholder="client@example.com"></div>
+      <div><label class="fi-lbl">Subject</label><input class="fi" type="text" id="em-subject"></div>
+      <div><label class="fi-lbl">Message</label><textarea class="fi" id="em-body" rows="10" style="font-size:11px;font-family:monospace"></textarea></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('emailModal')">Cancel</button>
+      <button class="btn btn-navy" id="emailSendBtn" onclick="sendEmailJS()">✉ Send Email</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const LIVIO_KEY='livio_v1';
+let contracts=JSON.parse(localStorage.getItem('dt_contracts')||'[]');
+let curProjectId=null;
+let signCtId=null;
+let emailCtId=null;
+
+/* ── HELPERS ── */
+function getLivioProjects(){try{const s=localStorage.getItem(LIVIO_KEY);if(!s)return{projects:[],activeId:null};return JSON.parse(s);}catch(e){return{projects:[],activeId:null};}}
+function getAllProjects(){return getLivioProjects().projects||[];}
+function getProj(){return getAllProjects().find(x=>x.id===curProjectId)||null;}
+const saveContracts=()=>localStorage.setItem('dt_contracts',JSON.stringify(contracts));
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmtD=s=>s?new Date(s+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+const fmtM=n=>n!=null&&n!==''&&n!==0?'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+function loadActiveProject(){const db=getLivioProjects();curProjectId=db.activeId||(db.projects&&db.projects[0]?.id)||null;}
+
+/* ── TOAST ── */
+function showToast(msg,type='info',dur=3500){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className='toast '+type;t.textContent=msg;c.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},dur);
+}
+
+/* ── EMAIL SETTINGS ── */
+function getEmailConfig(){try{return JSON.parse(localStorage.getItem('livio_email_config')||'{}')}catch{return{}}}
+function openEmailSettings(){
+  const cfg=getEmailConfig();
+  document.getElementById('ejs-key').value=cfg.publicKey||'';
+  document.getElementById('ejs-service').value=cfg.serviceId||'';
+  document.getElementById('ejs-template').value=cfg.templateId||'';
+  document.getElementById('emailSettingsModal').classList.add('open');
+}
+function saveEmailSettings(){
+  const cfg={publicKey:document.getElementById('ejs-key').value.trim(),serviceId:document.getElementById('ejs-service').value.trim(),templateId:document.getElementById('ejs-template').value.trim()};
+  if(!cfg.publicKey||!cfg.serviceId||!cfg.templateId){showToast('Please fill in all three fields.','error');return;}
+  localStorage.setItem('livio_email_config',JSON.stringify(cfg));
+  closeModal('emailSettingsModal');showToast('✅ Email settings saved!','success');
+}
+
+/* ── MAIN RENDER ── */
+function renderMain(){
+  const main=document.getElementById('mainArea');
+  const p=getProj();
+  if(!p){main.innerHTML=`<div class="empty"><div class="empty-ic">CC</div><p>No active project found. Select a project in Livio first.</p></div>`;return;}
+  const ctracts=contracts.filter(x=>x.projectId===p.id);
+
+  main.innerHTML=`
+  <div class="sh">
+    <div><div class="sh-title">Client Contracts</div><div class="sh-sub">Owner agreements – Prime contracts – Signed documents</div></div>
+    <button class="btn btn-navy" onclick="openAddContract()">+ Add Contract</button>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px">
+    <div class="ph">
+      <div>
+        <div class="ph-title">📁 ${esc(p.name)}</div>
+        <div class="ph-sub">${esc(p.address||p.city||'')}</div>
+      </div>
+      <span style="background:rgba(255,255,255,.12);color:#8AAAC8;font-size:10px;padding:3px 10px;border-radius:4px;font-weight:700">${ctracts.length} CONTRACT${ctracts.length!==1?'S':''}</span>
+    </div>
+    <div class="detail-grid">
+      <div><div class="dc-lbl">Client / Owner</div><div class="dc-val">${esc(p.client||'—')}</div></div>
+      ${p.clientEmail?`<div><div class="dc-lbl">Email</div><div class="dc-val">${esc(p.clientEmail)}</div></div>`:''}
+      ${p.clientPhone?`<div><div class="dc-lbl">Phone</div><div class="dc-val">${esc(p.clientPhone)}</div></div>`:''}
+      ${p.clientAddr?`<div><div class="dc-lbl">Address</div><div class="dc-val">${esc(p.clientAddr)}</div></div>`:''}
+      ${p.permit?`<div><div class="dc-lbl">Permit #</div><div class="dc-val">${esc(p.permit)}</div></div>`:''}
+      ${p.type?`<div><div class="dc-lbl">Type</div><div class="dc-val">${esc(p.type)}</div></div>`:''}
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg)">
+      ${!p.client?`<span style="font-size:11px;color:var(--amber);font-weight:600">⚠ No client info added yet</span>`:`<span style="font-size:11px;color:var(--green);font-weight:600">✓ ${esc(p.client)}</span>`}
+      <button class="btn btn-ghost btn-sm" onclick="openEditClientInfo()">✏ Edit Client Info</button>
+    </div>
+  </div>
+
+  ${!ctracts.length
+    ?`<div class="empty"><div class="empty-ic">CC</div><p>No contracts yet. Click <strong>+ Add Contract</strong> to create one.</p></div>`
+    :ctracts.map(ct=>renderContractCard(ct,p)).join('')}`;
+}
+
+function renderContractCard(ct,p){
+  const sCls={draft:'b-draft',active:'b-active',signed:'b-signed',expired:'b-expired'}[ct.status]||'b-draft';
+  const sLbl=(ct.status||'draft').charAt(0).toUpperCase()+(ct.status||'draft').slice(1);
+  return `<div class="panel">
+    <div class="ph">
+      <div>
+        <div class="ph-title">${esc(ct.project||p.name||'Contract')}</div>
+        <div class="ph-sub">${ct.num?'# '+esc(ct.num):''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span class="badge ${sCls}">${sLbl}</span>
+        <button class="btn btn-xs" style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)" onclick="openEditContract('${ct.id}')">✏ Edit</button>
+        <button class="btn btn-xs" style="background:rgba(180,30,30,.3);color:#F09595;border:1px solid rgba(180,30,30,.4)" onclick="deleteContract('${ct.id}')">🗑</button>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div><div class="dc-lbl">Contract Value</div><div class="dc-val money">${fmtM(ct.amount)}</div></div>
+      <div><div class="dc-lbl">Type</div><div class="dc-val">${esc(ct.type||'—')}</div></div>
+      <div><div class="dc-lbl">Contract Date</div><div class="dc-val">${fmtD(ct.date)}</div></div>
+      <div><div class="dc-lbl">Completion</div><div class="dc-val">${fmtD(ct.end)}</div></div>
+    </div>
+    ${ct.scope?`<div style="padding:0 16px 12px"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Scope of Work</div><div style="font-size:12px;color:var(--text);line-height:1.6">${esc(ct.scope)}</div></div>`:''}
+    ${ct.terms?`<div style="padding:0 16px 12px"><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Payment Terms</div><div style="font-size:12px;color:var(--text)">${esc(ct.terms)}</div></div>`:''}
+    <div class="ct-actions">
+      <button class="btn btn-green" onclick="downloadContractPDF('${ct.id}')">⬇ Download PDF</button>
+      <button class="btn btn-amber" onclick="openSendForSigning('${ct.id}')">✍ Send for Signing</button>
+      <button class="btn btn-blue" onclick="openSendContractEmail('${ct.id}')">✉ Send Email</button>
+    </div>
+  </div>`;
+}
+
+/* ── jsPDF CONTRACT DOWNLOAD ── */
+function downloadContractPDF(id){
+  const ct=contracts.find(x=>x.id===id);if(!ct)return;
+  const p=getAllProjects().find(x=>x.id===ct.projectId)||{};
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=210,navy=[12,27,46],white=[255,255,255],gray=[247,246,242],muted=[119,118,114],blue=[26,107,196],green=[45,106,15];
+
+  // Navy header
+  doc.setFillColor(...navy);doc.rect(0,0,W,40,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(...white);
+  doc.text('Livio Building Systems',14,15);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(138,170,200);
+  doc.text('Construction Management · Licensed General Contractor',14,21);
+  // CONTRACT title
+  doc.setFont('helvetica','bold');doc.setFontSize(24);doc.setTextColor(...white);
+  doc.text('CONTRACT',W-14,17,{align:'right'});
+  doc.setFontSize(10);doc.setTextColor(138,170,200);
+  doc.text(ct.num||'—',W-14,24,{align:'right'});
+  // Status
+  const sBgMap={draft:[119,118,114],active:[45,106,15],signed:[26,107,196],expired:[155,31,31]};
+  const sBg=sBgMap[ct.status]||sBgMap.draft;
+  const sLbl=(ct.status||'draft').toUpperCase();
+  doc.setFillColor(...sBg);doc.roundedRect(W-14-32,30,34,8,2,2,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...white);
+  doc.text(sLbl,W-14,36,{align:'right'});
+
+  // Client / Contractor section
+  let y=50;
+  doc.setFillColor(...gray);doc.rect(0,y-4,W,42,'F');
+  // Left: Client
+  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...muted);
+  doc.text('CLIENT / OWNER',14,y);y+=4;
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(...navy);
+  doc.text(p.client||'—',14,y);y+=5;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(51,51,51);
+  if(p.clientAddr||p.address)doc.text(p.clientAddr||p.address||'',14,y),y+=4;
+  if(p.clientEmail)doc.text(p.clientEmail,14,y),y+=4;
+  if(p.clientPhone)doc.text(p.clientPhone,14,y),y+=4;
+
+  // Right: Contract details
+  let yr=54;
+  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...muted);
+  doc.text('CONTRACT DETAILS',W/2+10,yr);yr+=5;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(51,51,51);
+  const details=[['Contract Date:',fmtD(ct.date)],['Completion Date:',fmtD(ct.end)],['Contract Type:',ct.type||'—'],['Contract Value:',ct.amount?'$'+Number(ct.amount).toLocaleString('en-US',{minimumFractionDigits:2}):'—']];
+  details.forEach(([lbl,val])=>{
+    doc.setFont('helvetica','bold');doc.text(lbl,W/2+10,yr);
+    doc.setFont('helvetica','normal');doc.text(val,W/2+46,yr);yr+=5;
+  });
+
+  // Project / Contractor section
+  let y2=Math.max(y,yr)+8;
+  doc.setFillColor(232,242,252);doc.rect(0,y2-4,W,26,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...muted);
+  doc.text('PROJECT',14,y2);y2+=4;
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...navy);
+  doc.text(ct.project||p.name||'—',14,y2);y2+=5;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(51,51,51);
+  if(p.address)doc.text(p.address,14,y2),y2+=4;
+  if(p.permit)doc.text('Permit #: '+p.permit,14,y2),y2+=4;
+
+  let yr2=y2-13;
+  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...muted);
+  doc.text('CONTRACTOR',W/2+10,yr2);yr2+=5;
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...navy);
+  doc.text('Livio Building Systems',W/2+10,yr2);yr2+=5;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(51,51,51);
+  doc.text('Licensed General Contractor',W/2+10,yr2);yr2+=4;
+  doc.text('California License #: ___________',W/2+10,yr2);yr2+=4;
+  doc.text('Insurance: General Liability',W/2+10,yr2);
+
+  // Scope of Work
+  let fy=Math.max(y2,yr2)+8;
+  if(ct.scope){
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
+    doc.text('SCOPE OF WORK',14,fy);fy+=2;
+    doc.setDrawColor(...blue);doc.setLineWidth(0.8);doc.line(14,fy+1,W-14,fy+1);fy+=5;
+    doc.setFillColor(232,242,252);
+    const scopeLines=doc.splitTextToSize(ct.scope,W-32);
+    const scopeH=scopeLines.length*5+6;
+    doc.rect(14,fy-2,W-28,scopeH,'F');
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(51,51,51);
+    doc.text(scopeLines,18,fy+2);fy+=scopeH+6;
+  }
+
+  // Payment Terms
+  if(ct.terms){
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
+    doc.text('PAYMENT TERMS',14,fy);fy+=2;
+    doc.setDrawColor(...green);doc.setLineWidth(0.8);doc.line(14,fy+1,W-14,fy+1);fy+=5;
+    doc.setFillColor(236,245,227);
+    const termLines=doc.splitTextToSize(ct.terms,W-32);
+    const termH=termLines.length*5+6;
+    doc.rect(14,fy-2,W-28,termH,'F');
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(51,51,51);
+    doc.text(termLines,18,fy+2);fy+=termH+6;
+  }
+
+  // Check page space — add new page if needed
+  if(fy>220){doc.addPage();fy=20;}
+
+  // Terms & Conditions
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
+  doc.text('TERMS & CONDITIONS',14,fy);fy+=2;
+  doc.setDrawColor(...navy);doc.setLineWidth(0.5);doc.line(14,fy+1,W-14,fy+1);fy+=6;
+  const tc=[
+    'Contractor shall complete all work in a professional and workmanlike manner in accordance with applicable codes.',
+    'Any changes to scope of work must be agreed to in writing by both parties prior to execution.',
+    'Client is responsible for providing adequate site access, utilities, and permits unless otherwise specified.',
+    'Contractor maintains general liability insurance. Certificates available upon request.',
+    'Disputes shall be resolved through mediation before pursuing litigation.',
+    'This contract is governed by the laws of the State of California.',
+    'Neither party may assign this contract without prior written consent of the other party.',
+    'All work is subject to final inspection and acceptance by the Client before final payment is released.'
+  ];
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(51,51,51);
+  tc.forEach((item,i)=>{
+    if(fy>265){doc.addPage();fy=20;}
+    const lines=doc.splitTextToSize(`${i+1}. ${item}`,W-30);
+    doc.text(lines,18,fy);fy+=lines.length*4.5+1.5;
+  });
+
+  // Signature section
+  if(fy>240){doc.addPage();fy=20;}
+  fy+=8;
+  doc.setDrawColor(...navy);doc.setLineWidth(0.5);doc.line(14,fy,W-14,fy);fy+=5;
+  // Left sig
+  doc.setFillColor(...navy);doc.rect(14,fy,0.8,1,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...navy);
+  doc.text('CLIENT / OWNER SIGNATURE',14,fy);
+  // Right sig
+  doc.text('CONTRACTOR SIGNATURE',W/2+10,fy);fy+=10;
+  doc.setDrawColor(180,180,180);doc.setLineWidth(0.4);
+  doc.line(14,fy,W/2-10,fy);
+  doc.line(W/2+10,fy,W-14,fy);
+  fy+=6;
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(100,100,100);
+  doc.text('Name: '+(p.client||'________________________________'),14,fy);
+  doc.text('Name: Livio Building Systems',W/2+10,fy);fy+=6;
+  doc.text('Date: ___________________________',14,fy);
+  doc.text('Date: ___________________________',W/2+10,fy);
+
+  // Footer
+  const fY=288;
+  doc.setDrawColor(...navy);doc.setLineWidth(0.3);doc.line(14,fY-4,W-14,fY-4);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...muted);
+  doc.text('Livio Building Systems · '+(p.name||'')+' · Contract '+(ct.num||'')+' · Generated '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}),W/2,fY,{align:'center'});
+
+  doc.save('Contract-'+(ct.num||'export')+'.pdf');
+  showToast('⬇ Contract PDF downloaded!','success');
+}
+
+/* ── SEND FOR SIGNING ── */
+function buildSigningBody(ct,p){
+  return `Dear ${p.client||'Client'},
+
+I hope this message finds you well. Please find the details of your Construction Contract below for your review and signature.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CONTRACT: ${ct.num||'—'}   STATUS: ${(ct.status||'DRAFT').toUpperCase()}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Client:          ${p.client||'—'}
+Project:         ${ct.project||p.name||'—'}
+Address:         ${p.address||'—'}
+Contract Date:   ${fmtD(ct.date)}
+Completion Date: ${fmtD(ct.end)}
+Contract Type:   ${ct.type||'—'}
+Contract Value:  ${fmtM(ct.amount)}
+
+SCOPE OF WORK:
+${ct.scope||'As discussed and agreed upon.'}
+
+PAYMENT TERMS:
+${ct.terms||'As per agreement.'}
+
+TERMS & CONDITIONS:
+1. Contractor shall complete all work in a professional and workmanlike manner in accordance with applicable codes.
+2. Any changes to scope of work must be agreed to in writing by both parties prior to execution.
+3. Client is responsible for providing adequate site access, utilities, and permits unless otherwise specified.
+4. Contractor maintains general liability insurance. Certificates available upon request.
+5. Disputes shall be resolved through mediation before pursuing litigation.
+6. This contract is governed by the laws of the State of California.
+7. Neither party may assign this contract without prior written consent of the other party.
+8. All work is subject to final inspection and acceptance by the Client before final payment is released.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TO SIGN THIS CONTRACT:
+Please reply to this email with the following confirmation:
+
+  "I AGREE – ${p.client||'[Your Full Name]'} – ${new Date().toLocaleDateString()}"
+
+By replying with the above, you confirm your acceptance of all terms and conditions stated in this contract. Your email reply will serve as your digital signature.
+
+If you have any questions or require amendments, please don't hesitate to contact us before signing.
+
+Thank you for choosing Livio Building Systems. We look forward to working with you!
+
+Best regards,
+Livio Building Systems
+Licensed General Contractor`;
+}
+
+function openSendForSigning(id){
+  const ct=contracts.find(x=>x.id===id);if(!ct)return;
+  const p=getAllProjects().find(x=>x.id===ct.projectId)||{};
+  signCtId=id;
+  document.getElementById('sg-to').value=p.clientEmail||'';
+  document.getElementById('sg-subject').value=`Construction Contract ${ct.num||''} – ${p.name||''} – Signature Required`;
+  document.getElementById('sg-body').value=buildSigningBody(ct,p);
+  const cfg=getEmailConfig();
+  if(!cfg.publicKey||!cfg.serviceId||!cfg.templateId){
+    if(confirm('EmailJS is not configured. Open Email Settings now?')){openEmailSettings();return;}
+    return;
+  }
+  document.getElementById('signModal').classList.add('open');
+}
+
+function sendForSigning(){
+  const cfg=getEmailConfig();
+  if(!cfg.publicKey||!cfg.serviceId||!cfg.templateId){showToast('❌ EmailJS not configured. Click "Email Settings".','error');return;}
+  const to=document.getElementById('sg-to').value.trim();
+  const subject=document.getElementById('sg-subject').value.trim();
+  const message=document.getElementById('sg-body').value.trim();
+  if(!to){showToast('Please enter a recipient email address.','error');return;}
+  const btn=document.getElementById('signSendBtn');
+  btn.innerHTML='<span class="spinner"></span> Sending…';btn.disabled=true;
+  emailjs.init(cfg.publicKey);
+  emailjs.send(cfg.serviceId,cfg.templateId,{to_email:to,subject,message,from_name:'Livio Building Systems'})
+    .then(()=>{btn.innerHTML='✍ Send for Signing';btn.disabled=false;closeModal('signModal');showToast('✅ Contract sent for signing!','success');})
+    .catch(err=>{btn.innerHTML='✍ Send for Signing';btn.disabled=false;showToast('❌ Failed: '+(err.text||err.message||JSON.stringify(err)),'error');});
+}
+
+/* ── SEND CONTRACT EMAIL ── */
+function openSendContractEmail(id){
+  const ct=contracts.find(x=>x.id===id);if(!ct)return;
+  const p=getAllProjects().find(x=>x.id===ct.projectId)||{};
+  emailCtId=id;
+  const body=`Dear ${p.client||'Client'},
+
+Please find your contract summary below.
+
+Contract #: ${ct.num||'—'}
+Project: ${ct.project||p.name||'—'}
+Contract Value: ${fmtM(ct.amount)}
+Contract Date: ${fmtD(ct.date)}
+Completion Date: ${fmtD(ct.end)}
+Type: ${ct.type||'—'}
+Status: ${(ct.status||'draft').toUpperCase()}
+
+${ct.scope?'Scope of Work:\n'+ct.scope+'\n\n':''}${ct.terms?'Payment Terms:\n'+ct.terms+'\n\n':''}Please review and contact us with any questions.
+
+Best regards,
+Livio Building Systems`;
+
+  document.getElementById('em-to').value=p.clientEmail||'';
+  document.getElementById('em-subject').value='Contract '+(ct.num||'')+'  – '+(p.name||'');
+  document.getElementById('em-body').value=body;
+  const cfg=getEmailConfig();
+  if(!cfg.publicKey||!cfg.serviceId||!cfg.templateId){
+    if(confirm('EmailJS is not configured. Open Email Settings now?')){openEmailSettings();return;}
+    return;
+  }
+  document.getElementById('emailModal').classList.add('open');
+}
+
+function sendEmailJS(){
+  const cfg=getEmailConfig();
+  if(!cfg.publicKey||!cfg.serviceId||!cfg.templateId){showToast('❌ EmailJS not configured. Click "Email Settings".','error');return;}
+  const to=document.getElementById('em-to').value.trim();
+  const subject=document.getElementById('em-subject').value.trim();
+  const message=document.getElementById('em-body').value.trim();
+  if(!to){showToast('Please enter a recipient email address.','error');return;}
+  const btn=document.getElementById('emailSendBtn');
+  btn.innerHTML='<span class="spinner"></span> Sending…';btn.disabled=true;
+  emailjs.init(cfg.publicKey);
+  emailjs.send(cfg.serviceId,cfg.templateId,{to_email:to,subject,message,from_name:'Livio Building Systems'})
+    .then(()=>{btn.innerHTML='✉ Send Email';btn.disabled=false;closeModal('emailModal');showToast('✅ Email sent successfully!','success');})
+    .catch(err=>{btn.innerHTML='✉ Send Email';btn.disabled=false;showToast('❌ Failed: '+(err.text||err.message||JSON.stringify(err)),'error');});
+}
+
+/* ── CONTRACT CRUD ── */
+function openAddContract(){
+  const p=getProj();if(!p){alert('No active project found.');return;}
+  document.getElementById('ct-modal-title').textContent='📄 Add Contract';
+  document.getElementById('ct-id').value='';
+  document.getElementById('ct-project').value=p.name||'';
+  document.getElementById('ct-project-info').textContent='👤 '+(p.client||'No client set')+' · '+p.name;
+  document.getElementById('ct-num').value='CC-'+new Date().getFullYear()+'-'+String(contracts.length+1).padStart(3,'0');
+  document.getElementById('ct-amount').value='';
+  document.getElementById('ct-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('ct-end').value='';
+  document.getElementById('ct-status').value='draft';
+  document.getElementById('ct-type').value='Fixed Price';
+  document.getElementById('ct-scope').value='';
+  document.getElementById('ct-terms').value='';
+  document.getElementById('contractModal').classList.add('open');
+}
+function openEditContract(id){
+  const ct=contracts.find(x=>x.id===id);if(!ct)return;
+  const p=getAllProjects().find(x=>x.id===ct.projectId)||{};
+  document.getElementById('ct-modal-title').textContent='✏ Edit Contract';
+  document.getElementById('ct-id').value=ct.id;
+  document.getElementById('ct-project').value=ct.project||p.name||'';
+  document.getElementById('ct-project-info').textContent='👤 '+(p.client||'No client set')+' · '+(p.name||'');
+  document.getElementById('ct-num').value=ct.num||'';
+  document.getElementById('ct-amount').value=ct.amount||'';
+  document.getElementById('ct-date').value=ct.date||'';
+  document.getElementById('ct-end').value=ct.end||'';
+  document.getElementById('ct-status').value=ct.status||'draft';
+  document.getElementById('ct-type').value=ct.type||'Fixed Price';
+  document.getElementById('ct-scope').value=ct.scope||'';
+  document.getElementById('ct-terms').value=ct.terms||'';
+  document.getElementById('contractModal').classList.add('open');
+}
+function saveContract(){
+  const p=getProj();if(!p){alert('No active project.');return;}
+  const eid=document.getElementById('ct-id').value;
+  const data={projectId:curProjectId,project:p.name||'',num:document.getElementById('ct-num').value.trim(),amount:document.getElementById('ct-amount').value,type:document.getElementById('ct-type').value,date:document.getElementById('ct-date').value,end:document.getElementById('ct-end').value,status:document.getElementById('ct-status').value,scope:document.getElementById('ct-scope').value.trim(),terms:document.getElementById('ct-terms').value.trim()};
+  if(eid&&contracts.find(x=>x.id===eid)){Object.assign(contracts.find(x=>x.id===eid),data);}
+  else{contracts.push({id:'ctr_'+Date.now(),...data});}
+  saveContracts();closeModal('contractModal');renderMain();
+}
+function deleteContract(id){
+  if(!confirm('Delete this contract?'))return;
+  contracts=contracts.filter(c=>c.id!==id);
+  saveContracts();renderMain();
+}
+
+/* ── EDIT CLIENT INFO ── */
+function openEditClientInfo(){
+  const p=getProj();if(!p)return;
+  document.getElementById('ec-name').value=p.client||'';
+  document.getElementById('ec-phone').value=p.clientPhone||'';
+  document.getElementById('ec-email').value=p.clientEmail||'';
+  document.getElementById('ec-addr').value=p.clientAddr||'';
+  document.getElementById('editClientModal').classList.add('open');
+}
+function saveClientInfo(){
+  const db=getLivioProjects();
+  const p=db.projects.find(x=>x.id===curProjectId);
+  if(!p){alert('Project not found.');return;}
+  p.client=document.getElementById('ec-name').value.trim();
+  p.clientPhone=document.getElementById('ec-phone').value.trim();
+  p.clientEmail=document.getElementById('ec-email').value.trim();
+  p.clientAddr=document.getElementById('ec-addr').value.trim();
+  localStorage.setItem('livio_v1',JSON.stringify(db));
+  closeModal('editClientModal');renderMain();showToast('✅ Client info saved!','success');
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+(function init(){loadActiveProject();renderMain();})();
+setInterval(()=>{const db=getLivioProjects();if(db.activeId&&db.activeId!==curProjectId){curProjectId=db.activeId;renderMain();}},2000);
+</script>
+</body>
+</html>
