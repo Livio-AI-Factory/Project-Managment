@@ -189,7 +189,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <body>
 
 <div class="topbar">
-  <div class="tb-title">?? Client Invoices</div>
+  <div class="tb-title">🧾 Client Invoices</div>
   <div class="tb-right">
     <button class="btn btn-navy btn-sm" onclick="openAddInvoice()">+ Add Invoice</button>
   </div>
@@ -209,7 +209,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- EDIT CLIENT INFO MODAL -->
 <div class="modal-overlay" id="editClientModal">
   <div class="modal" style="max-width:480px">
-    <div class="modal-hd"><h3>?? Edit Client Info</h3><button class="modal-close" onclick="closeModal('editClientModal')">?</button></div>
+    <div class="modal-hd"><h3>👤 Edit Client Info</h3><button class="modal-close" onclick="closeModal('editClientModal')">✕</button></div>
     <div class="modal-body">
       <div><label class="fi-lbl">Full Name / Company *</label><input class="fi" type="text" id="ec-name" placeholder="e.g. John Doe / ABC Corp"></div>
       <div class="fi-row">
@@ -220,7 +220,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
     </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('editClientModal')">Cancel</button>
-      <button class="btn btn-navy" onclick="saveClientInfo()">Save ?</button>
+      <button class="btn btn-navy" onclick="saveClientInfo()">Save →</button>
     </div>
   </div>
 </div>
@@ -228,7 +228,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- ADD / EDIT INVOICE MODAL -->
 <div class="modal-overlay" id="invoiceModal">
   <div class="modal" style="max-width:640px">
-    <div class="modal-hd"><h3 id="inv-modal-title">?? New Invoice</h3><button class="modal-close" onclick="closeModal('invoiceModal')">?</button></div>
+    <div class="modal-hd"><h3 id="inv-modal-title">🧾 New Invoice</h3><button class="modal-close" onclick="closeModal('invoiceModal')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="inv-id">
       <div class="fi-info" id="inv-project-info">—</div>
@@ -274,7 +274,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- ADD PAYMENT MODAL -->
 <div class="modal-overlay" id="paymentModal">
   <div class="modal" style="max-width:480px">
-    <div class="modal-hd"><h3>?? Record Payment</h3><button class="modal-close" onclick="closeModal('paymentModal')">?</button></div>
+    <div class="modal-hd"><h3>💵 Record Payment</h3><button class="modal-close" onclick="closeModal('paymentModal')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="pay-inv-id">
       <div class="fi-info" id="pay-inv-info">—</div>
@@ -291,7 +291,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
     </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('paymentModal')">Cancel</button>
-      <button class="btn btn-green" onclick="savePayment()">?? Save Payment</button>
+      <button class="btn btn-green" onclick="savePayment()">💾 Save Payment</button>
     </div>
   </div>
 </div>
@@ -299,7 +299,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- SEND INVOICE EMAIL MODAL -->
 <div class="modal-overlay" id="emailModal">
   <div class="modal" style="max-width:500px">
-    <div class="modal-hd"><h3 id="em-modal-title">? Send Invoice by Email</h3><button class="modal-close" onclick="closeModal('emailModal')">?</button></div>
+    <div class="modal-hd"><h3 id="em-modal-title">✉ Send Invoice by Email</h3><button class="modal-close" onclick="closeModal('emailModal')">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="em-type">
       <input type="hidden" id="em-ref-id">
@@ -310,7 +310,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
     </div>
     <div class="modal-ft">
       <button class="btn btn-ghost" onclick="closeModal('emailModal')">Cancel</button>
-      <button class="btn btn-navy" id="emailSendBtn" onclick="sendEmailJS()">? Send</button>
+      <button class="btn btn-navy" id="emailSendBtn" onclick="sendEmailJS()">✉ Send</button>
     </div>
   </div>
 </div>
@@ -466,9 +466,9 @@ function renderLedgerStrip(invs){
       <div class="ls-val ${balanceDue>0.001?'amber':''}">${fmtM(balanceDue)}</div>
     </div>
     <div class="ls-actions">
-      <button class="btn btn-white btn-sm" onclick="downloadLedgerPDF()">? PDF Ledger</button>
-      <button class="btn btn-white btn-sm" onclick="downloadLedgerExcel()">?? Excel Ledger</button>
-      <button class="btn btn-white btn-sm" onclick="openSendLedgerEmail()">? Send Ledger</button>
+      <button class="btn btn-white btn-sm" onclick="downloadLedgerPDF()">⬇ PDF Ledger</button>
+      <button class="btn btn-white btn-sm" onclick="downloadLedgerExcel()">📊 Excel Ledger</button>
+      <button class="btn btn-white btn-sm" onclick="openSendLedgerEmail()">✉ Send Ledger</button>
     </div>`;
 }
 
@@ -503,7 +503,7 @@ function renderMain(){
   <div class="proj-panel">
     <div class="proj-hd">
       <div>
-        <div class="proj-hd-title">?? ${esc(p.name)}</div>
+        <div class="proj-hd-title">📁 ${esc(p.name)}</div>
         <div class="proj-hd-sub">${esc(p.address||p.city||'')}</div>
       </div>
       <span style="background:rgba(255,255,255,.12);color:#8AAAC8;font-size:10px;padding:3px 10px;border-radius:4px;font-weight:700">${invs.length} INVOICE${invs.length!==1?'S':''}</span>
@@ -534,20 +534,20 @@ function renderInvoiceCard(inv,p){
   let payRows='';
   pays.forEach(pay=>{
     const proofHtml=pay.proofName
-      ?`<a class="proof-chip" href="#" onclick="viewProof('${esc(inv.id)}','${esc(pay.id)}');return false">?? ${esc(pay.proofName)}</a>`
+      ?`<a class="proof-chip" href="#" onclick="viewProof('${esc(inv.id)}','${esc(pay.id)}');return false">📎 ${esc(pay.proofName)}</a>`
       :`<span style="color:var(--muted);font-size:10px">—</span>`;
     payRows+=`<tr>
       <td>${fmtD(pay.date)}</td>
       <td>${fmtM(pay.amount)}</td>
       <td style="color:var(--muted)">${esc(pay.note||'—')}</td>
       <td>${proofHtml}</td>
-      <td><button class="btn btn-xs btn-red" onclick="deletePayment('${esc(inv.id)}','${esc(pay.id)}')">??</button></td>
+      <td><button class="btn btn-xs btn-red" onclick="deletePayment('${esc(inv.id)}','${esc(pay.id)}')">🗑</button></td>
     </tr>`;
   });
 
   const paySection=pays.length?`
   <div class="pay-hist">
-    <div class="pay-hist-title">?? Payment History (${pays.length} record${pays.length!==1?'s':''})</div>
+    <div class="pay-hist-title">💵 Payment History (${pays.length} record${pays.length!==1?'s':''})</div>
     <table class="pay-table">
       <thead><tr><th>Date</th><th>Amount</th><th>Reference</th><th>Proof</th><th></th></tr></thead>
       <tbody>${payRows}</tbody>
@@ -617,10 +617,10 @@ function renderInvoiceCard(inv,p){
 
     <div class="inv-actions">
       <button class="btn btn-blue btn-sm" onclick="generateInvoicePDF('${inv.id}')">? PDF</button>
-      <button class="btn btn-green btn-sm" onclick="openSendInvoiceEmail('${inv.id}')">? Send Email</button>
-      <button class="btn btn-amber btn-sm" onclick="openAddPayment('${inv.id}')">?? Add Payment</button>
+      <button class="btn btn-green btn-sm" onclick="openSendInvoiceEmail('${inv.id}')">✉ Send Email</button>
+      <button class="btn btn-amber btn-sm" onclick="openAddPayment('${inv.id}')">💰 Add Payment</button>
       <button class="btn btn-ghost btn-sm" onclick="openEditInvoice('${inv.id}')">? Edit</button>
-      <button class="btn btn-red btn-sm" style="margin-left:auto" onclick="deleteInvoice('${inv.id}')">?? Delete</button>
+      <button class="btn btn-red btn-sm" style="margin-left:auto" onclick="deleteInvoice('${inv.id}')">🗑 Delete</button>
     </div>
   </div>`;
 }
@@ -629,7 +629,7 @@ function renderInvoiceCard(inv,p){
 function openAddInvoice(){
   editInvId=null;
   lineItems=[{desc:'',qty:1,price:0}];
-  document.getElementById('inv-modal-title').textContent='?? New Invoice';
+  document.getElementById('inv-modal-title').textContent='🧾 New Invoice';
   document.getElementById('inv-id').value='';
   const p=getProj();
   const today=new Date().toISOString().slice(0,10);
@@ -681,7 +681,7 @@ function renderLineItems(){
     <td><input type="number" value="${l.qty||1}" min="1" style="width:60px" oninput="lineItems[${i}].qty=parseFloat(this.value)||1;updateModalTotals()"></td>
     <td><input type="number" value="${l.price||0}" min="0" step="0.01" oninput="lineItems[${i}].price=parseFloat(this.value)||0;updateModalTotals()"></td>
     <td class="line-total">${fmtM((l.qty||1)*(l.price||0))}</td>
-    <td><button type="button" class="rm-row" onclick="removeLine(${i})">?</button></td>
+    <td><button type="button" class="rm-row" onclick="removeLine(${i})">✕</button></td>
   </tr>`).join('');
   updateModalTotals();
 }
@@ -1297,7 +1297,7 @@ function openSendLedgerEmail(){
   });
   body+=`\n${'-'.repeat(50)}\nThank you for your business!\nLivio Building Systems`;
 
-  document.getElementById('em-modal-title').textContent='? Send Payment Ledger';
+  document.getElementById('em-modal-title').textContent='✉ Send Payment Ledger';
   document.getElementById('em-type').value='ledger';
   document.getElementById('em-ref-id').value='';
   document.getElementById('em-to').value=p.clientEmail||'';
@@ -1332,7 +1332,7 @@ function openSendInvoiceEmail(invId){
   if(inv.paymentTerms)body+=`\nPayment Terms:\n${inv.paymentTerms}\n`;
   body+=`\nThank you for your business!\nLivio Building Systems`;
 
-  document.getElementById('em-modal-title').textContent=`? Send Invoice ${inv.num}`;
+  document.getElementById('em-modal-title').textContent=`✉ Send Invoice ${inv.num}`;
   document.getElementById('em-type').value='invoice';
   document.getElementById('em-ref-id').value=invId;
   document.getElementById('em-to').value=p?.clientEmail||'';
@@ -1359,7 +1359,7 @@ function sendEmailJS(){
     .catch(err=>{
       showToast('? SMTP email failed: '+(err.message||JSON.stringify(err)),'error',6000);
     })
-    .finally(()=>{btn.innerHTML='? Send';btn.disabled=false;});
+    .finally(()=>{btn.innerHTML='✉ Send';btn.disabled=false;});
 }
 
 /* -- SYNC FROM PARENT (iframe) ----------------------------- */
