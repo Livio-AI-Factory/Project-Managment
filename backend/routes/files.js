@@ -8,6 +8,8 @@ const { getSupabaseAdmin, getSupabaseConfig, hasSupabaseConfig } = require('../l
 const { getUploadDir } = require('../lib/storagePaths');
 
 const UPLOAD_DIR = getUploadDir();
+const MAX_UPLOAD_MB = Math.max(1, Number(process.env.MAX_UPLOAD_MB || 300));
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 function allowFile(req, file, cb) {
@@ -33,19 +35,28 @@ const diskUpload = multer({
       cb(null, `${uuidv4()}_${name}${ext}`);
     }
   }),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: allowFile
 });
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: MAX_UPLOAD_BYTES },
   fileFilter: allowFile
 });
 
 router.post('/upload', (req, res, next) => {
   const middleware = hasSupabaseConfig() ? memoryUpload : diskUpload;
-  middleware.array('files', 20)(req, res, next);
+  middleware.array('files', 20)(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? `File too large. Max ${MAX_UPLOAD_MB}MB per file.`
+        : err.message;
+      return res.status(413).json({ error: msg });
+    }
+    return res.status(400).json({ error: err.message || 'Upload failed' });
+  });
 }, async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {

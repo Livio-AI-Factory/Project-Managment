@@ -395,6 +395,70 @@ const COLS = [
   {id:'done',label:'Done',c:'#68d391'},
 ];
 const BARC = {backlog:'#636b77',todo:'#4da6f5',inprogress:'#2dd4a0',review:'#a78bfa',done:'#3a4049'};
+const LIVIO_KEY='livio_v1';
+function cloneData(v,fallback){
+  try{return JSON.parse(JSON.stringify(v ?? fallback));}catch{return fallback;}
+}
+function getHostApp(){
+  try{
+    if(window.parent && window.parent!==window && window.parent.DB && typeof window.parent.saveDB==='function'){
+      return window.parent;
+    }
+  }catch{}
+  return null;
+}
+function readLocalLivioDB(){
+  try{return JSON.parse(localStorage.getItem(LIVIO_KEY)||'{}')}catch{return{}}
+}
+function getLivioDB(){
+  const host=getHostApp();
+  return host?.DB || readLocalLivioDB();
+}
+function persistLivioDB(db){
+  const host=getHostApp();
+  if(host?.DB){
+    try{
+      host.saveDB();
+      return;
+    }catch(err){
+      console.error('momentum shared save failed:',err);
+    }
+  }
+  localStorage.setItem(LIVIO_KEY,JSON.stringify(db));
+}
+function deriveMomentumState(db){
+  const safeDb=db||{};
+  const projects=(safeDb.projects||[]).map(p=>({id:p.id,name:p.name,color:p.color||'#2dd4a0',desc:p.address||''}));
+  const tasks=[];
+  const statusMap={active:'inprogress',inprogress:'inprogress',starting:'inprogress',hold:'review',caloshahold:'review',complete:'done'};
+  (safeDb.projects||[]).forEach(p=>{
+    (p.works||[]).forEach(w=>{
+      tasks.push({id:w.id,title:w.name,project:p.id,status:statusMap[w.status]||'todo',priority:'med',type:'infra',assignee:'',progress:w.pct||0,start:'',end:''});
+    });
+    (p.milestones||[]).forEach(m=>{
+      tasks.push({id:m.id,title:m.name,project:p.id,status:m.status==='passed'?'done':m.status==='failed'?'review':'todo',priority:'high',type:'feature',assignee:'',progress:m.status==='passed'?100:0,start:m.date||'',end:m.date||''});
+    });
+  });
+  return {projects,tasks,proj:null,view:'kb',zoom:'months',drag:null,gtOpen:{}};
+}
+function readMomentumState(){
+  const db=getLivioDB();
+  const base=deriveMomentumState(db);
+  const raw=db.momentumState;
+  if(!raw || !Array.isArray(raw.projects) || !Array.isArray(raw.tasks)) return base;
+  const mergedProjects=[...raw.projects.map(p=>({...p}))];
+  base.projects.forEach(bp=>{
+    const idx=mergedProjects.findIndex(p=>p.id===bp.id);
+    if(idx>=0) mergedProjects[idx]={...mergedProjects[idx],name:bp.name,color:bp.color,desc:bp.desc};
+    else mergedProjects.push(bp);
+  });
+  return {...base,...cloneData(raw,{}),projects:mergedProjects,tasks:cloneData(raw.tasks,[]),drag:null};
+}
+function saveMomentumState(){
+  const db=getLivioDB();
+  db.momentumState={projects:cloneData(S.projects,[]),tasks:cloneData(S.tasks,[]),proj:S.proj ?? null,view:S.view ?? 'kb',zoom:S.zoom ?? 'months',gtOpen:cloneData(S.gtOpen,{})};
+  persistLivioDB(db);
+}
 
 // ── state ──
 let S = {
@@ -431,6 +495,7 @@ let S = {
   drag: null,
   gtOpen: {},
 };
+S = readMomentumState();
 
 const vis = () => S.proj ? S.tasks.filter(t=>t.project===S.proj) : S.tasks;
 
@@ -558,7 +623,7 @@ function kbDrop(e,col){
   document.querySelectorAll('.kb-col').forEach(c=>c.classList.remove('drop-over'));
   if(!S.drag)return;
   const t=S.tasks.find(t=>t.id===S.drag);
-  if(t&&t.status!==col){ t.status=col; renderKanban(); renderGantt(); renderStats(); toast('Moved to '+COLS.find(c=>c.id===col).label); }
+  if(t&&t.status!==col){ t.status=col; saveMomentumState(); renderKanban(); renderGantt(); renderStats(); toast('Moved to '+COLS.find(c=>c.id===col).label); }
   S.drag=null;
 }
 
@@ -696,6 +761,7 @@ function saveTask(){
   } else {
     data.id=uid(); S.tasks.push(data); toast('Task created');
   }
+  saveMomentumState();
   closeTaskModal(); renderKanban(); renderGantt(); renderStats();
 }
 function deleteTask(){
@@ -706,6 +772,7 @@ function deleteTask(){
   closeTaskModal();
   confirm2('Delete task',`Delete "${t.title}"?\nThis cannot be undone.`,'Delete task',()=>{
     S.tasks=S.tasks.filter(t=>t.id!==eid);
+    saveMomentumState();
     renderKanban(); renderGantt(); renderStats(); toast('Task deleted');
   });
 }
@@ -765,6 +832,7 @@ function newProj(){
   if(!name?.trim())return;
   const color=COLORS[S.projects.length%COLORS.length];
   S.projects.push({id:uid(),name:name.trim(),color,desc:''});
+  saveMomentumState();
   renderSidebar(); toast('Project "'+name.trim()+'" created');
 }
 
@@ -787,7 +855,7 @@ function inlineRename(pid){
   inp.focus(); inp.select();
   const commit=()=>{
     const v=inp.value.trim();
-    if(v&&v!==proj.name){proj.name=v;toast('Renamed to "'+v+'"');}
+    if(v&&v!==proj.name){proj.name=v;saveMomentumState();toast('Renamed to "'+v+'"');}
     renderSidebar(); renderKanban(); renderGantt();
   };
   inp.addEventListener('blur',commit,{once:true});
@@ -802,7 +870,7 @@ function renamePrompt(pid){
   if(!proj)return;
   const n=prompt('Rename project:',proj.name);
   if(n?.trim()&&n.trim()!==proj.name){
-    proj.name=n.trim(); renderSidebar(); renderKanban(); renderGantt(); toast('Renamed to "'+proj.name+'"');
+    proj.name=n.trim(); saveMomentumState(); renderSidebar(); renderKanban(); renderGantt(); toast('Renamed to "'+proj.name+'"');
   }
 }
 
@@ -810,6 +878,7 @@ function setProjColor(pid,color){
   const proj=S.projects.find(p=>p.id===pid);
   if(!proj)return;
   proj.color=color;
+  saveMomentumState();
   renderSidebar(); renderKanban(); renderGantt(); toast('Color updated');
 }
 
@@ -820,6 +889,7 @@ function dupProj(pid){
   S.projects.push({...proj,id:nid,name:proj.name+' (copy)'});
   const nt=S.tasks.filter(t=>t.project===pid).map(t=>({...t,id:uid(),project:nid}));
   S.tasks.push(...nt);
+  saveMomentumState();
   renderSidebar(); renderStats(); renderKanban(); renderGantt();
   toast(`Duplicated with ${nt.length} task${nt.length!==1?'s':''}`);
 }
@@ -848,6 +918,7 @@ function deleteProj(pid){
     S.projects=S.projects.filter(p=>p.id!==pid);
     S.tasks=S.tasks.filter(t=>t.project!==pid);
     if(S.proj===pid) S.proj=null;
+    saveMomentumState();
     renderSidebar(); renderStats(); renderKanban(); renderGantt();
     toast(`"${proj.name}" deleted`);
   });
@@ -884,6 +955,7 @@ function saveProjModal(){
   proj.name=name; proj.desc=g('pm-desc').value.trim();
   const sel=g('pm-clrs').querySelector('.sw.sel');
   if(sel) proj.color=sel.dataset.c;
+  saveMomentumState();
   closeProjModal(); renderSidebar(); renderKanban(); renderGantt(); toast('Project saved');
 }
 function closeProjModal(){ g('proj-ov').classList.remove('open'); }
@@ -915,37 +987,18 @@ document.addEventListener('keydown',e=>{
 });
 
 // ── BOOT ──
-(function loadFromLivio(){
-  try{
-    const raw=localStorage.getItem('livio_v1');
-    if(!raw)return;
-    const db=JSON.parse(raw);
-    if(!db.projects||!db.projects.length)return;
-    const statusMap={active:'inprogress',inprogress:'inprogress',starting:'inprogress',hold:'review',caloshahold:'review',complete:'done'};
-    S.projects=db.projects.map(p=>({id:p.id,name:p.name,color:p.color||'#2dd4a0',desc:p.address||''}));
-    S.tasks=[];
-    db.projects.forEach(p=>{
-      (p.works||[]).forEach(w=>{
-        S.tasks.push({
-          id:w.id,title:w.name,project:p.id,
-          status:statusMap[w.status]||'todo',
-          priority:'med',type:'infra',assignee:'',
-          progress:w.pct||0,start:'',end:''
-        });
-      });
-      (p.milestones||[]).forEach(m=>{
-        S.tasks.push({
-          id:m.id,title:m.name,project:p.id,
-          status:m.status==='passed'?'done':m.status==='failed'?'review':'todo',
-          priority:'high',type:'feature',assignee:'',
-          progress:m.status==='passed'?100:0,start:m.date||'',end:m.date||''
-        });
-      });
-    });
-  }catch(e){}
-})();
-renderSidebar(); renderStats(); renderKanban(); renderGantt();
+function syncActiveProject(force=false){
+  const next=readMomentumState();
+  const nextSig=JSON.stringify({projects:next.projects,tasks:next.tasks,proj:next.proj,view:next.view,zoom:next.zoom,gtOpen:next.gtOpen});
+  const curSig=JSON.stringify({projects:S.projects,tasks:S.tasks,proj:S.proj,view:S.view,zoom:S.zoom,gtOpen:S.gtOpen});
+  if(!force && nextSig===curSig) return;
+  S={...next,drag:null};
+  renderSidebar(); renderStats(); renderKanban(); renderGantt();
+}
+window.syncActiveProject=syncActiveProject;
+syncActiveProject(true);
 g('today-lbl').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+setInterval(()=>syncActiveProject(),2000);
 </script>
 </body>
 </html>

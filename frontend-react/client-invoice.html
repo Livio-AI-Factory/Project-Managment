@@ -350,18 +350,76 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 <!-- ══════════════════════════════════ SCRIPT ══════════════════════════════════ -->
 <script>
 const LIVIO_KEY='livio_v1';
-let invoices=JSON.parse(localStorage.getItem('dt_invoices')||'[]');
+function getHostApp(){
+  try{
+    if(window.parent && window.parent!==window && window.parent.DB && typeof window.parent.saveDB==='function'){
+      return window.parent;
+    }
+  }catch{}
+  return null;
+}
+function readLocalLivioDB(){
+  try{return JSON.parse(localStorage.getItem(LIVIO_KEY)||'{}')}catch{return{}}
+}
+function getLivioDB(){
+  const host=getHostApp();
+  return host?.DB || readLocalLivioDB();
+}
+function persistLivioDB(db){
+  const host=getHostApp();
+  if(host?.DB){
+    try{
+      host.saveDB();
+      return;
+    }catch(err){
+      console.error('client invoice shared save failed:',err);
+    }
+  }
+  localStorage.setItem(LIVIO_KEY,JSON.stringify(db));
+}
+function readInvoices(){
+  const projects=(getLivioDB().projects)||[];
+  const hasProjectInvoices=projects.some(p=>Array.isArray(p.clientInvoices));
+  if(hasProjectInvoices){
+    return projects.flatMap(p=>(p.clientInvoices||[]).map(inv=>({
+      ...inv,
+      projectId:inv.projectId||p.id,
+      project:inv.project||p.name||''
+    })));
+  }
+  try{
+    return JSON.parse(localStorage.getItem('dt_invoices')||'[]');
+  }catch{
+    return [];
+  }
+}
+let invoices=readInvoices();
 let curProjectId=null;
 let lineItems=[];
 let editInvId=null;
 let payProofName='';
 let payProofData='';
+let lastInvoiceSig='';
 
 /* ── HELPERS ─────────────────────────────────────────────── */
-function getLivioDB(){try{return JSON.parse(localStorage.getItem(LIVIO_KEY)||'{}')}catch{return{}}}
 function getAllProjects(){return getLivioDB().projects||[]}
 function getProj(){return getAllProjects().find(x=>x.id===curProjectId)||null}
-function saveInvoices(){localStorage.setItem('dt_invoices',JSON.stringify(invoices))}
+function saveInvoices(){
+  const db=getLivioDB();
+  const projects=db.projects||[];
+  if(projects.length){
+    projects.forEach(p=>{
+      p.clientInvoices=invoices
+        .filter(inv=>inv.projectId===p.id)
+        .map(inv=>({...inv,projectId:p.id,project:inv.project||p.name||''}));
+    });
+    persistLivioDB(db);
+    lastInvoiceSig=JSON.stringify(invoices);
+    return;
+  }
+  localStorage.setItem('dt_invoices',JSON.stringify(invoices));
+  lastInvoiceSig=JSON.stringify(invoices);
+}
 function uid(){return Math.random().toString(36).slice(2,10)}
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 const fmtD=s=>s?new Date(s+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'
@@ -1393,18 +1451,27 @@ generateInvoicePDF = function(invId){
 
 function syncActiveProject(){
   loadActiveProject();
+  invoices=readInvoices();
+  lastInvoiceSig=JSON.stringify(invoices);
   renderMain();
 }
+window.syncActiveProject=syncActiveProject;
 
 /* ── INIT ────────────────────────────────────────────────── */
-loadActiveProject();
-renderMain();
+syncActiveProject();
 
 // Polling fallback
 setInterval(()=>{
   const db=getLivioDB();
   const newId=db.activeId||(db.projects&&db.projects[0]?.id)||null;
-  if(newId!==curProjectId){curProjectId=newId;renderMain();}
+  const nextInvoices=readInvoices();
+  const nextSig=JSON.stringify(nextInvoices);
+  if(newId!==curProjectId || nextSig!==lastInvoiceSig){
+    curProjectId=newId;
+    invoices=nextInvoices;
+    lastInvoiceSig=nextSig;
+    renderMain();
+  }
 },2000);
 </script>
 </body>

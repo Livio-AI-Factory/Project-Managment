@@ -320,6 +320,7 @@ export default function PageShell() {
           title="Daily Tracker"
           html={dailyTrackerHtml}
           isActive={curPage === 'daily-tracker'}
+          onActivate={(frameWindow) => frameWindow.syncActiveProject?.()}
         />
       </div>
 
@@ -415,6 +416,7 @@ export default function PageShell() {
           title="Momentum"
           html={momentumHtml}
           isActive={curPage === 'momentum'}
+          onActivate={(frameWindow) => frameWindow.syncActiveProject?.()}
         />
       </div>
 

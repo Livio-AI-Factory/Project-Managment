@@ -212,16 +212,80 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);font
 
 <script>
 const LIVIO_KEY='livio_v1';
-let contracts=JSON.parse(localStorage.getItem('dt_contracts')||'[]');
+function getHostApp(){
+  try{
+    if(window.parent && window.parent!==window && window.parent.DB && typeof window.parent.saveDB==='function'){
+      return window.parent;
+    }
+  }catch{}
+  return null;
+}
+function readLocalLivioProjects(){
+  try{
+    const s=localStorage.getItem(LIVIO_KEY);
+    if(!s)return{projects:[],activeId:null};
+    return JSON.parse(s);
+  }catch(e){
+    return{projects:[],activeId:null};
+  }
+}
+function getLivioProjects(){
+  const host=getHostApp();
+  return host?.DB || readLocalLivioProjects();
+}
+function persistLivioProjects(db){
+  const host=getHostApp();
+  if(host?.DB){
+    try{
+      host.saveDB();
+      return;
+    }catch(err){
+      console.error('client contract shared save failed:',err);
+    }
+  }
+  localStorage.setItem(LIVIO_KEY,JSON.stringify(db));
+}
+function readContracts(){
+  const projects=(getLivioProjects().projects)||[];
+  const hasProjectContracts=projects.some(p=>Array.isArray(p.clientContracts));
+  if(hasProjectContracts){
+    return projects.flatMap(p=>(p.clientContracts||[]).map(ct=>({
+      ...ct,
+      projectId:ct.projectId||p.id,
+      project:ct.project||p.name||''
+    })));
+  }
+  try{
+    return JSON.parse(localStorage.getItem('dt_contracts')||'[]');
+  }catch{
+    return [];
+  }
+}
+let contracts=readContracts();
 let curProjectId=null;
 let signCtId=null;
 let emailCtId=null;
+let lastContractSig='';
 
 /* ── HELPERS ── */
-function getLivioProjects(){try{const s=localStorage.getItem(LIVIO_KEY);if(!s)return{projects:[],activeId:null};return JSON.parse(s);}catch(e){return{projects:[],activeId:null};}}
 function getAllProjects(){return getLivioProjects().projects||[];}
 function getProj(){return getAllProjects().find(x=>x.id===curProjectId)||null;}
-const saveContracts=()=>localStorage.setItem('dt_contracts',JSON.stringify(contracts));
+function saveContracts(){
+  const db=getLivioProjects();
+  const projects=db.projects||[];
+  if(projects.length){
+    projects.forEach(p=>{
+      p.clientContracts=contracts
+        .filter(c=>c.projectId===p.id)
+        .map(c=>({...c,projectId:p.id,project:c.project||p.name||''}));
+    });
+    persistLivioProjects(db);
+    lastContractSig=JSON.stringify(contracts);
+    return;
+  }
+  localStorage.setItem('dt_contracts',JSON.stringify(contracts));
+  lastContractSig=JSON.stringify(contracts);
+}
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const fmtD=s=>s?new Date(s+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
 const fmtM=n=>n!=null&&n!==''&&n!==0?'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
@@ -669,13 +733,26 @@ function saveClientInfo(){
   p.clientPhone=document.getElementById('ec-phone').value.trim();
   p.clientEmail=document.getElementById('ec-email').value.trim();
   p.clientAddr=document.getElementById('ec-addr').value.trim();
-  localStorage.setItem('livio_v1',JSON.stringify(db));
+  persistLivioProjects(db);
   closeModal('editClientModal');renderMain();showToast('✅ Client info saved!','success');
 }
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
-(function init(){loadActiveProject();renderMain();})();
-setInterval(()=>{const db=getLivioProjects();if(db.activeId&&db.activeId!==curProjectId){curProjectId=db.activeId;renderMain();}},2000);
+function syncActiveProject(force=false){
+  const db=getLivioProjects();
+  const nextId=db.activeId||(db.projects&&db.projects[0]?.id)||null;
+  const nextContracts=readContracts();
+  const nextSig=JSON.stringify(nextContracts);
+  if(!force && nextId===curProjectId && nextSig===lastContractSig)return;
+  curProjectId=nextId;
+  contracts=nextContracts;
+  lastContractSig=nextSig;
+  renderMain();
+}
+window.syncActiveProject=syncActiveProject;
+
+(function init(){syncActiveProject(true);})();
+setInterval(()=>syncActiveProject(),2000);
 </script>
 </body>
 </html>

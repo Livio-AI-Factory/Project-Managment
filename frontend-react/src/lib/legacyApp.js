@@ -1550,7 +1550,7 @@ function openModal(type, id=null){
       <div class="fr"><label class="fl">Document Type</label><select class="fs" id="f-plan-type">${['Architectural Plans','Structural Plans','Electrical Plans','Plumbing Plans','Mechanical Plans','Site Plan','Permit','Geotechnical Report','Soils Report','Title 24 Compliance','CALGreen Checklist','Inspection Report','Contract','Other'].map(t=>`<option>${t}</option>`).join('')}</select></div>
       ${dropZoneHTML('plan-files','Drop plans, drawings, PDFs, DWG, or any document here…')}
       <div style="font-size:10px;color:var(--muted);margin-top:6px;padding:0 2px">
-        Max file size: 300MB per file &nbsp;·&nbsp; Files are stored in your browser — large files may fill storage quickly
+        Max file size: 300MB per file &nbsp;·&nbsp; Files upload to your backend and sync with the project across browsers
       </div>`;
 
   } else if(type==='inspection'){

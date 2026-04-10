@@ -663,15 +663,112 @@ const DISC_SEED = [
 ];
 
 // ── STATE ──
-let days = JSON.parse(localStorage.getItem('dt_days')||'[]');
-let discItems = JSON.parse(localStorage.getItem('dt_disc')||'null') || JSON.parse(JSON.stringify(DISC_SEED));
+const DT_STATE_KEY = 'dt_state';
+const cloneData = (value, fallback) => {
+  if (value == null) return fallback;
+  try { return JSON.parse(JSON.stringify(value)); } catch { return fallback; }
+};
+function getHostApp(){
+  try{
+    if(window.parent && window.parent !== window && window.parent.DB && typeof window.parent.saveDB === 'function'){
+      return window.parent;
+    }
+  }catch{}
+  return null;
+}
+function getHostProject(host=getHostApp()){
+  try{
+    const db = host?.DB;
+    const projects = db?.projects;
+    if(!Array.isArray(projects) || !projects.length) return null;
+    const activeId = db.activeId ?? db.activeProjectId ?? projects[0]?.id ?? null;
+    return projects.find(p=>p.id===activeId) || projects[0] || null;
+  }catch{}
+  return null;
+}
+function readFallbackState(){
+  let daysState = [];
+  let discState = null;
+  let clientsState = [];
+  let meta = {};
+  try{ daysState = JSON.parse(localStorage.getItem('dt_days')||'[]'); }catch{}
+  try{ discState = JSON.parse(localStorage.getItem('dt_disc')||'null'); }catch{}
+  try{ clientsState = JSON.parse(localStorage.getItem('dt_clients')||'[]'); }catch{}
+  try{ meta = JSON.parse(localStorage.getItem(DT_STATE_KEY)||'{}') || {}; }catch{}
+  return {
+    days: Array.isArray(daysState) ? daysState : [],
+    discItems: Array.isArray(discState) ? discState : cloneData(DISC_SEED, []),
+    clients: Array.isArray(clientsState) ? clientsState : [],
+    curDay: meta.curDay ?? null,
+    curDiscId: meta.curDiscId ?? null,
+    curClient: meta.curClient ?? null,
+  };
+}
+function buildTrackerState(){
+  return {
+    days: cloneData(days, []),
+    discItems: cloneData(discItems, []),
+    clients: cloneData(clients, []),
+    curDay,
+    curDiscId,
+    curClient,
+  };
+}
+function applyTrackerState(raw){
+  const state = raw && typeof raw === 'object' ? raw : {};
+  days = Array.isArray(state.days) ? cloneData(state.days, []) : [];
+  discItems = Array.isArray(state.discItems) ? cloneData(state.discItems, []) : cloneData(DISC_SEED, []);
+  clients = Array.isArray(state.clients) ? cloneData(state.clients, []) : [];
+  curDay = state.curDay && days.some(d=>d.id===state.curDay) ? state.curDay : (days.length ? days[days.length-1].id : null);
+  curDiscId = state.curDiscId && discItems.some(d=>d.id===state.curDiscId) ? state.curDiscId : null;
+  curClient = state.curClient && clients.some(c=>c.id===state.curClient) ? state.curClient : null;
+}
+function writeFallbackState(state){
+  localStorage.setItem('dt_days', JSON.stringify(state.days));
+  localStorage.setItem('dt_disc', JSON.stringify(state.discItems));
+  localStorage.setItem('dt_clients', JSON.stringify(state.clients));
+  localStorage.setItem(DT_STATE_KEY, JSON.stringify({
+    curDay: state.curDay ?? null,
+    curDiscId: state.curDiscId ?? null,
+    curClient: state.curClient ?? null,
+  }));
+}
+function readTrackerState(){
+  const project = getHostProject();
+  if(project){
+    return project.dailyTracker || {};
+  }
+  return readFallbackState();
+}
+function saveTrackerState(){
+  const state = buildTrackerState();
+  const host = getHostApp();
+  const project = getHostProject(host);
+  if(project){
+    project.dailyTracker = cloneData(state, {});
+    try{
+      host.saveDB();
+      return;
+    }catch(err){
+      console.error('daily tracker shared save failed:', err);
+    }
+  }
+  writeFallbackState(state);
+}
+let days = [];
+let discItems = [];
 let curDay = null;
 let curDiscId = null;
 let sideView = 'days';
 let discFilter = 'all';
 let expandedDisc = {};
+let clients = [];
+let curClient = null;
+let syncedProjectId = null;
 
-const save = () => { localStorage.setItem('dt_days',JSON.stringify(days)); localStorage.setItem('dt_disc',JSON.stringify(discItems)); };
+applyTrackerState(readTrackerState());
+
+const save = () => { saveTrackerState(); };
 const getDay = id => days.find(d=>d.id===id);
 const getDisc = id => discItems.find(d=>d.id===id);
 const esc = s => (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
@@ -1130,9 +1227,7 @@ function closeLightbox(){
 function switchTab(e,id){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));e.target.classList.add('active');document.getElementById(id).classList.add('active')}
 
 // ── CLIENTS ──
-let clients = JSON.parse(localStorage.getItem('dt_clients')||'[]');
-let curClient = null;
-const saveClients = () => localStorage.setItem('dt_clients', JSON.stringify(clients));
+const saveClients = () => save();
 
 function renderClientSidebar(f=''){
   const list=document.getElementById('clientList');
@@ -1351,10 +1446,21 @@ function exportAll(){
 }
 
 // ── INIT ──
+function syncActiveProject(force=false){
+  const nextProjectId = getHostProject()?.id ?? null;
+  if(!force && nextProjectId === syncedProjectId) return;
+  syncedProjectId = nextProjectId;
+  applyTrackerState(readTrackerState());
+  renderSidebar();
+  renderDiscSidebar();
+  renderClientSidebar();
+  renderMain();
+}
+window.syncActiveProject = syncActiveProject;
+
 document.getElementById('todayLabel').textContent=new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
-renderSidebar();
-renderDiscSidebar();
-renderMain();
+syncActiveProject(true);
+setInterval(()=>syncActiveProject(),1500);
 </script>
 </body>
 </html>
