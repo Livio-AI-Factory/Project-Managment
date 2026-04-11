@@ -82,6 +82,31 @@ function parseEmailList(value) {
     .filter(Boolean);
 }
 
+function normalizeAttachments(value) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+
+      const filename = String(item.filename || 'attachment').trim();
+      const contentType = String(item.contentType || 'application/octet-stream').trim();
+      let content = String(item.content || '').trim();
+
+      if (!content) return null;
+
+      const dataUriMatch = content.match(/^data:.*?;base64,(.+)$/i);
+      if (dataUriMatch) content = dataUriMatch[1];
+
+      return {
+        filename,
+        contentType,
+        content
+      };
+    })
+    .filter(Boolean);
+}
+
 function friendlyEmailError(err) {
   const msg = String(err?.message || '').trim();
   const code = String(err?.code || '').trim();
@@ -135,12 +160,13 @@ async function resendRequest(path, options = {}) {
   return data;
 }
 
-async function sendViaResend({ to, cc, subject, message, fromName, replyTo }) {
+async function sendViaResend({ to, cc, subject, message, fromName, replyTo, attachments }) {
   const recipients = parseEmailList(to);
   if (!recipients.length) throw new Error('Recipient email (to) is required');
 
   const ccList = parseEmailList(cc);
   const { from } = getFromIdentity(fromName);
+  const attachmentList = normalizeAttachments(attachments);
 
   const payload = {
     from,
@@ -152,6 +178,12 @@ async function sendViaResend({ to, cc, subject, message, fromName, replyTo }) {
 
   if (ccList.length) payload.cc = ccList;
   if (replyTo) payload.reply_to = replyTo;
+  if (attachmentList.length) {
+    payload.attachments = attachmentList.map((item) => ({
+      filename: item.filename,
+      content: item.content
+    }));
+  }
 
   const data = await resendRequest('/emails', {
     method: 'POST',
@@ -167,7 +199,7 @@ async function sendViaResend({ to, cc, subject, message, fromName, replyTo }) {
   };
 }
 
-async function sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride }) {
+async function sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride, attachments }) {
   const smtp = normalizeSmtpConfig(smtpOverride || {});
   const smtpUser = smtp.user;
   if (!smtpUser) {
@@ -176,6 +208,7 @@ async function sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOv
 
   const transporter = buildTransporter(smtp);
   const { from } = getFromIdentity(fromName);
+  const attachmentList = normalizeAttachments(attachments);
 
   const mailOptions = {
     from,
@@ -184,7 +217,13 @@ async function sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOv
     replyTo: replyTo || undefined,
     subject,
     text: message,
-    html: `<pre style="font-family:Arial,sans-serif;font-size:13px;white-space:pre-wrap;line-height:1.7">${escapeHtml(message)}</pre>`
+    html: `<pre style="font-family:Arial,sans-serif;font-size:13px;white-space:pre-wrap;line-height:1.7">${escapeHtml(message)}</pre>`,
+    attachments: attachmentList.map((item) => ({
+      filename: item.filename,
+      content: item.content,
+      encoding: 'base64',
+      contentType: item.contentType
+    }))
   };
 
   const info = await transporter.sendMail(mailOptions);
@@ -200,7 +239,7 @@ async function sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOv
 
 async function sendEmail(req, res) {
   try {
-    const { to, cc, subject, message, fromName, replyTo, smtpOverride } = req.body || {};
+    const { to, cc, subject, message, fromName, replyTo, smtpOverride, attachments } = req.body || {};
 
     if (!to) return res.status(400).json({ error: 'Recipient email (to) is required' });
     if (!subject) return res.status(400).json({ error: 'Subject is required' });
@@ -214,8 +253,8 @@ async function sendEmail(req, res) {
     }
 
     const result = provider === 'resend'
-      ? await sendViaResend({ to, cc, subject, message, fromName, replyTo })
-      : await sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride });
+      ? await sendViaResend({ to, cc, subject, message, fromName, replyTo, attachments })
+      : await sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride, attachments });
 
     return res.json(result);
   } catch (err) {

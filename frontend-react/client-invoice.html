@@ -427,13 +427,14 @@ function renderEmailSendStatus(){
   const el=document.getElementById('em-status');
   if(el)el.innerHTML=getEmailStatusHtml();
 }
-async function sendEmailThroughBackend(to,subject,message){
+async function sendEmailThroughBackend(to,subject,message,attachments){
   const payload={
     to,
     subject,
     message,
     fromName:'Livio Building Systems'
   };
+  if(Array.isArray(attachments)&&attachments.length) payload.attachments=attachments;
   const res=await fetch(getEmailApiBase()+'/email/send',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -857,11 +858,11 @@ function saveClientInfo(){
 }
 
 /* -- GENERATE INVOICE PDF ---------------------------------- */
-function generateInvoicePDF(invId){
+function buildInvoicePDFDoc(invId){
   const inv=invoices.find(x=>x.id===invId);
-  if(!inv){showToast('Invoice not found.','error');return;}
+  if(!inv) throw new Error('Invoice not found.');
   const p=getProj();
-  if(!window.jspdf){showToast('PDF library not loaded yet. Try again.','error');return;}
+  if(!window.jspdf) throw new Error('PDF library not loaded yet. Try again.');
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'pt',format:'letter'});
   const W=doc.internal.pageSize.getWidth();
@@ -1084,8 +1085,24 @@ function generateInvoicePDF(invId){
   doc.setTextColor(160,160,160);
   doc.text('Livio Building Systems · Licensed Contractor · All Rights Reserved',W/2,ftY+35,{align:'center'});
 
+  return { doc, inv };
+}
+
+function generateInvoicePDF(invId){
+  const { doc, inv } = buildInvoicePDFDoc(invId);
   doc.save(`${inv.num||'Invoice'}.pdf`);
   showToast(`? ${inv.num}.pdf downloaded!`,'success');
+}
+
+function buildInvoicePdfAttachment(invId){
+  const { doc, inv } = buildInvoicePDFDoc(invId);
+  const dataUri=doc.output('datauristring');
+  const content=String(dataUri).split(',')[1]||'';
+  return {
+    filename:`${inv.num||'Invoice'}.pdf`,
+    content,
+    contentType:'application/pdf'
+  };
 }
 
 /* -- DOWNLOAD LEDGER PDF ----------------------------------- */
@@ -1349,13 +1366,27 @@ function sendEmailJS(){
   const to=document.getElementById('em-to').value.trim();
   const subject=document.getElementById('em-subject').value.trim();
   const body=document.getElementById('em-body').value.trim();
+  const type=document.getElementById('em-type').value;
+  const refId=document.getElementById('em-ref-id').value;
   if(!to||!subject||!body){showToast('Fill all fields.','error');return;}
   const btn=document.getElementById('emailSendBtn');
   btn.innerHTML='<span class="spinner"></span> Sending…';
   btn.disabled=true;
-  sendEmailThroughBackend(to,subject,body)
+  let attachments=[];
+  try{
+    if(type==='invoice'&&refId){
+      attachments=[buildInvoicePdfAttachment(refId)];
+    }
+  }catch(err){
+    btn.innerHTML='✉ Send';
+    btn.disabled=false;
+    showToast('? Unable to attach invoice PDF: '+(err.message||err),'error',6000);
+    return;
+  }
+  sendEmailThroughBackend(to,subject,body,attachments)
     .then(()=>{
-      showToast('? Email sent successfully!','success',4500);
+      const message=(type==='invoice'&&refId)?'? Email sent with invoice PDF attached!':'? Email sent successfully!';
+      showToast(message,'success',4500);
       closeModal('emailModal');
     })
     .catch(err=>{
