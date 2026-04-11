@@ -1,8 +1,44 @@
-// ── Email Controller — Nodemailer ─────────────────────────────
-// Sends emails directly from the server using SMTP (Gmail, Outlook, etc.)
-// No third-party browser SDKs needed.
-
 const nodemailer = require('nodemailer');
+
+const RESEND_API_BASE = 'https://api.resend.com';
+
+function getEmailProvider() {
+  if (String(process.env.RESEND_API_KEY || '').trim()) return 'resend';
+  if (String(process.env.SMTP_USER || '').trim() && String(process.env.SMTP_PASS || '').trim()) return 'smtp';
+  return null;
+}
+
+function getEmailStatusData() {
+  const provider = getEmailProvider();
+
+  if (provider === 'resend') {
+    const fromAddress = String(process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev').trim();
+    return {
+      configured: true,
+      provider,
+      apiBase: RESEND_API_BASE,
+      fromAddress,
+      message: 'Resend email service configured - ready to send'
+    };
+  }
+
+  if (provider === 'smtp') {
+    return {
+      configured: true,
+      provider,
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: process.env.SMTP_PORT || 587,
+      user: process.env.SMTP_USER,
+      message: 'SMTP configured - ready to send'
+    };
+  }
+
+  return {
+    configured: false,
+    provider: null,
+    message: 'Email service not configured - set RESEND_API_KEY or SMTP credentials in the backend environment'
+  };
+}
 
 function normalizeSmtpConfig(cfg = {}) {
   const host = String(cfg.host || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
@@ -18,24 +54,53 @@ function normalizeSmtpConfig(cfg = {}) {
   return { host, port, secure, user, pass };
 }
 
+function getFromIdentity(fromName) {
+  const provider = getEmailProvider();
+  const displayName = fromName || process.env.EMAIL_FROM_NAME || 'Livio Building Systems';
+  const smtpUser = normalizeSmtpConfig({}).user;
+  const fromAddress = String(
+    process.env.EMAIL_FROM_ADDRESS ||
+    (provider === 'resend' ? 'onboarding@resend.dev' : smtpUser)
+  ).trim();
+
+  return {
+    fromName: displayName,
+    fromAddress,
+    from: `${displayName} <${fromAddress}>`
+  };
+}
+
+function parseEmailList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+
+  return String(value)
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function friendlyEmailError(err) {
   const msg = String(err?.message || '').trim();
   const code = String(err?.code || '').trim();
 
   if (code === 'EAUTH') return 'SMTP authentication failed. Check SMTP_USER and SMTP_PASS. For Gmail, use an App Password.';
-  if (code === 'ETIMEDOUT' || /timed out/i.test(msg)) return 'SMTP connection timed out. Check SMTP host, port, and provider access.';
+  if (code === 'ETIMEDOUT' || /timed out/i.test(msg)) return 'Email service connection timed out. Check provider access and network settings.';
   if (code === 'ESOCKET' || /certificate|ssl|tls/i.test(msg)) return 'SMTP TLS/SSL connection failed. Check SMTP_SECURE and provider settings.';
   if (/invalid login|username and password not accepted/i.test(msg)) return 'SMTP login was rejected. For Gmail or Google Workspace, use an App Password.';
+  if (/api key/i.test(msg) && /resend/i.test(msg)) return 'Resend API key is invalid or missing.';
+  if (/domain/i.test(msg) && /verify/i.test(msg)) return 'Resend sender domain is not verified yet. Use onboarding@resend.dev for testing or verify your domain.';
 
   return msg || 'Failed to send email';
 }
 
-/** Build transporter from .env or request-supplied config */
 function buildTransporter(cfg) {
   const smtp = normalizeSmtpConfig(cfg);
   return nodemailer.createTransport({
-    host:   smtp.host,
-    port:   smtp.port,
+    host: smtp.host,
+    port: smtp.port,
     secure: smtp.secure,
     auth: {
       user: smtp.user,
@@ -48,79 +113,173 @@ function buildTransporter(cfg) {
   });
 }
 
-/**
- * Send an email.
- * Body: { to, cc, subject, message, fromName, replyTo, smtpOverride? }
- */
+async function resendRequest(path, options = {}) {
+  const apiKey = String(process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) throw new Error('Resend API key is missing.');
+
+  const res = await fetch(`${RESEND_API_BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data?.message || data?.error || `Resend request failed (${res.status})`;
+    throw new Error(String(message));
+  }
+
+  return data;
+}
+
+async function sendViaResend({ to, cc, subject, message, fromName, replyTo }) {
+  const recipients = parseEmailList(to);
+  if (!recipients.length) throw new Error('Recipient email (to) is required');
+
+  const ccList = parseEmailList(cc);
+  const { from } = getFromIdentity(fromName);
+
+  const payload = {
+    from,
+    to: recipients,
+    subject,
+    text: message,
+    html: `<pre style="font-family:Arial,sans-serif;font-size:13px;white-space:pre-wrap;line-height:1.7">${escapeHtml(message)}</pre>`
+  };
+
+  if (ccList.length) payload.cc = ccList;
+  if (replyTo) payload.reply_to = replyTo;
+
+  const data = await resendRequest('/emails', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+  return {
+    ok: true,
+    provider: 'resend',
+    messageId: data.id,
+    accepted: recipients,
+    message: `Email sent successfully to ${recipients.join(', ')}`
+  };
+}
+
+async function sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride }) {
+  const smtp = normalizeSmtpConfig(smtpOverride || {});
+  const smtpUser = smtp.user;
+  if (!smtpUser) {
+    throw new Error('SMTP not configured - set SMTP_USER and SMTP_PASS in backend environment');
+  }
+
+  const transporter = buildTransporter(smtp);
+  const { from } = getFromIdentity(fromName);
+
+  const mailOptions = {
+    from,
+    to,
+    cc: cc || undefined,
+    replyTo: replyTo || undefined,
+    subject,
+    text: message,
+    html: `<pre style="font-family:Arial,sans-serif;font-size:13px;white-space:pre-wrap;line-height:1.7">${escapeHtml(message)}</pre>`
+  };
+
+  const info = await transporter.sendMail(mailOptions);
+
+  return {
+    ok: true,
+    provider: 'smtp',
+    messageId: info.messageId,
+    accepted: info.accepted,
+    message: 'Email sent successfully to ' + to
+  };
+}
+
 async function sendEmail(req, res) {
   try {
-    const { to, cc, subject, message, fromName, replyTo, smtpOverride } = req.body;
+    const { to, cc, subject, message, fromName, replyTo, smtpOverride } = req.body || {};
 
-    if (!to)      return res.status(400).json({ error: 'Recipient email (to) is required' });
+    if (!to) return res.status(400).json({ error: 'Recipient email (to) is required' });
     if (!subject) return res.status(400).json({ error: 'Subject is required' });
     if (!message) return res.status(400).json({ error: 'Message body is required' });
 
-    const smtp = normalizeSmtpConfig(smtpOverride || {});
-    const smtpUser = smtp.user;
-    if (!smtpUser) return res.status(500).json({ error: 'SMTP not configured — set SMTP_USER and SMTP_PASS in backend/.env' });
+    const provider = getEmailProvider();
+    if (!provider) {
+      return res.status(500).json({
+        error: 'Email service is not configured. Set RESEND_API_KEY or SMTP credentials on the backend.'
+      });
+    }
 
-    const transporter = buildTransporter(smtp);
+    const result = provider === 'resend'
+      ? await sendViaResend({ to, cc, subject, message, fromName, replyTo })
+      : await sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride });
 
-    const fromAddress = `${fromName || process.env.EMAIL_FROM_NAME || 'Livio Building Systems'} <${process.env.EMAIL_FROM_ADDRESS || smtpUser}>`;
-
-    const mailOptions = {
-      from:     fromAddress,
-      to:       to,
-      cc:       cc || undefined,
-      replyTo:  replyTo || undefined,
-      subject:  subject,
-      text:     message,
-      // Also send as basic HTML (preserves line breaks)
-      html:     `<pre style="font-family:Arial,sans-serif;font-size:13px;white-space:pre-wrap;line-height:1.7">${escapeHtml(message)}</pre>`
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-
-    return res.json({
-      ok:        true,
-      messageId: info.messageId,
-      accepted:  info.accepted,
-      message:   'Email sent successfully to ' + to
-    });
-
+    return res.json(result);
   } catch (err) {
     console.error('Email send error:', err);
     return res.status(500).json({
-      error:   friendlyEmailError(err),
+      error: friendlyEmailError(err),
       details: err.response || null
     });
   }
 }
 
-/**
- * Verify SMTP credentials without sending.
- * Body: { smtpOverride? }
- */
-async function verifySmtp(req, res) {
+async function verifyEmailService(req, res) {
   try {
-    const { smtpOverride } = req.body || {};
-    const smtp = normalizeSmtpConfig(smtpOverride || {});
-    if (!smtp.user || !smtp.pass) {
-      return res.status(400).json({ ok: false, error: 'SMTP_USER and SMTP_PASS are required on the backend.' });
+    const provider = getEmailProvider();
+
+    if (provider === 'resend') {
+      await resendRequest('/domains', { method: 'GET' });
+      return res.json({
+        ok: true,
+        provider,
+        message: 'Resend API connection verified successfully'
+      });
     }
-    const transporter = buildTransporter(smtp);
-    await transporter.verify();
-    return res.json({ ok: true, message: 'SMTP connection verified successfully' });
+
+    if (provider === 'smtp') {
+      const { smtpOverride } = req.body || {};
+      const smtp = normalizeSmtpConfig(smtpOverride || {});
+      if (!smtp.user || !smtp.pass) {
+        return res.status(400).json({ ok: false, provider, error: 'SMTP_USER and SMTP_PASS are required on the backend.' });
+      }
+
+      const transporter = buildTransporter(smtp);
+      await transporter.verify();
+      return res.json({
+        ok: true,
+        provider,
+        message: 'SMTP connection verified successfully'
+      });
+    }
+
+    return res.status(400).json({
+      ok: false,
+      provider: null,
+      error: 'Email service is not configured. Set RESEND_API_KEY or SMTP credentials on the backend.'
+    });
   } catch (err) {
-    return res.status(400).json({ ok: false, error: friendlyEmailError(err) });
+    return res.status(400).json({
+      ok: false,
+      provider: getEmailProvider(),
+      error: friendlyEmailError(err)
+    });
   }
 }
 
 function escapeHtml(str) {
-  return (str || '')
+  return String(str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
 
-module.exports = { sendEmail, verifySmtp };
+module.exports = {
+  getEmailProvider,
+  getEmailStatusData,
+  sendEmail,
+  verifyEmailService
+};

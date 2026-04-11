@@ -438,7 +438,7 @@ async function sendEmailThroughBackend(to,subject,message){
     body:JSON.stringify(payload)
   });
   const data=await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(data.error||data.message||('SMTP send failed ('+res.status+')'));
+  if(!res.ok) throw new Error(data.error||data.message||('Email send failed ('+res.status+')'));
   return data;
 }
 /* -- MODAL HELPERS ----------------------------------------- */
@@ -1342,7 +1342,7 @@ function openSendInvoiceEmail(invId){
   document.getElementById('emailModal').classList.add('open');
 }
 
-/* -- SEND VIA BACKEND SMTP --------------------------------- */
+/* -- SEND VIA BACKEND EMAIL SERVICE ------------------------ */
 function sendEmailJS(){
   const to=document.getElementById('em-to').value.trim();
   const subject=document.getElementById('em-subject').value.trim();
@@ -1353,11 +1353,11 @@ function sendEmailJS(){
   btn.disabled=true;
   sendEmailThroughBackend(to,subject,body)
     .then(()=>{
-      showToast('? Email sent successfully via SMTP!','success',4500);
+      showToast('? Email sent successfully!','success',4500);
       closeModal('emailModal');
     })
     .catch(err=>{
-      showToast('? SMTP email failed: '+(err.message||JSON.stringify(err)),'error',6000);
+      showToast('? Email send failed: '+(err.message||JSON.stringify(err)),'error',6000);
     })
     .finally(()=>{btn.innerHTML='✉ Send';btn.disabled=false;});
 }

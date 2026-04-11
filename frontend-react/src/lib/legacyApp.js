@@ -4322,7 +4322,7 @@ function getEmailStatusMarkup(cfg){
     <span style="font-size:20px">⚠️</span>
     <div>
       <div style="font-size:13px;font-weight:700;color:var(--green)">Email is managed by the backend</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">This app sends mail using the backend SMTP configuration only.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">This app sends mail using the backend email service.</div>
       <div style="font-size:10px;color:var(--muted);margin-top:3px">API: <strong>${apiBase}</strong></div>
     </div>
   </div>`;
@@ -4418,7 +4418,7 @@ async function testEmailConfig(){
   const testTo=prompt('Enter your email address to receive a test email:','');
   if(!testTo||!testTo.includes('@')){toast('⚠ Please enter a valid email');return;}
   const cfg=getEmailConfig();
-  toast('📧 Verifying SMTP…',3000);
+  toast('📧 Verifying email service…',3000);
   try{
     await verifyEmailConfigRequest(cfg);
     await sendAppEmail({
@@ -4428,8 +4428,8 @@ async function testEmailConfig(){
     });
     toast('✅ Test email sent to '+testTo);
   }catch(e){
-    console.error('SMTP test error:',e);
-    toast('⚠ SMTP test failed: '+e.message,'error',6000);
+    console.error('Email test error:',e);
+    toast('⚠ Email test failed: '+e.message,'error',6000);
   }
 }
 
@@ -4967,7 +4967,7 @@ function sendLedgerEmail(){
   toast('📧 Sending…',3000);
   sendAppEmail({to,cc,subject,message:body})
     .then(()=>{toast('✅ Ledger emailed to '+to);closeLedgerEmail();})
-    .catch(e=>{console.error('SMTP ledger send error:',e);toast('⚠ SMTP send failed: '+e.message,'error',6000);});
+    .catch(e=>{console.error('Ledger email send error:',e);toast('⚠ Email send failed: '+e.message,'error',6000);});
 }
 
 // ── Trade Ledger PDF ──────────────────────────────────────────────
@@ -5972,8 +5972,8 @@ function sendLienEmail(){
   const body=vEl('lien-email-body').value.trim();
   if(!to){toast('⚠ Recipient email is required');return;}
   sendAppEmail({to,subject,message:body})
-    .then(function(){_saveLienSent(to);closeLienEmail();toast('✉ Lien waiver email sent via SMTP');})
-    .catch(function(err){console.error('SMTP error:',err);toast('⚠ SMTP send failed: '+err.message,'error',6000);});
+    .then(function(){_saveLienSent(to);closeLienEmail();toast('✉ Lien waiver email sent');})
+    .catch(function(err){console.error('Email error:',err);toast('⚠ Email send failed: '+err.message,'error',6000);});
 }
 
 function sendContractEmail(vid){
@@ -6002,8 +6002,8 @@ function sendContractEmailModal(){
   const body=vEl('cemail-body').value.trim();
   if(!to){toast('⚠ Recipient email is required');return;}
   sendAppEmail({to,subject,message:body})
-    .then(function(){closeContractEmailModal();toast('✉ Contract email sent via SMTP');})
-    .catch(function(err){console.error('SMTP error:',err);toast('⚠ SMTP send failed: '+err.message,'error',6000);});
+    .then(function(){closeContractEmailModal();toast('✉ Contract email sent');})
+    .catch(function(err){console.error('Email error:',err);toast('⚠ Email send failed: '+err.message,'error',6000);});
 }
 
 function delVendor(vid){

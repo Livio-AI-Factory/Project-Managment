@@ -292,7 +292,7 @@ async function sendEmailThroughBackend(to,subject,message){
     body:JSON.stringify(payload)
   });
   const data=await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(data.error||data.message||('SMTP send failed ('+res.status+')'));
+  if(!res.ok) throw new Error(data.error||data.message||('Email send failed ('+res.status+')'));
   return data;
 }
 
