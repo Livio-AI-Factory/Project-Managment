@@ -414,7 +414,9 @@ function getEmailApiBase(){
     if(hostApi) return String(hostApi).replace(/\/+$/,'');
   }catch{}
   const isLocal=location.hostname==='127.0.0.1'||location.hostname==='localhost';
-  const fallback=isLocal?'http://127.0.0.1:3001/api':location.origin.replace(/\/+$/,'')+'/api';
+  const fallback=isLocal
+    ? 'http://127.0.0.1:3001/api'
+    : 'https://project-managment-production-7373.up.railway.app/api';
   return fallback.replace(/\/+$/,'');
 }
 function getEmailStatusHtml(){

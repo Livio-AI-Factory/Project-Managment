@@ -3951,7 +3951,7 @@ function detectDefaultApiBase(){
     const isLocalHost=hostname==='127.0.0.1'||hostname==='localhost';
     const isFrontendDevPort=['3000','4173','5173','5500'].includes(String(port||''));
     if(isLocalHost&&isFrontendDevPort) return 'http://127.0.0.1:3001/api';
-    return origin.replace(/\/+$/,'')+'/api';
+    return 'https://project-managment-production-7373.up.railway.app/api';
   }
   return 'http://127.0.0.1:3001/api';
 }

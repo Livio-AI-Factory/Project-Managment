@@ -22,6 +22,15 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || '')
   .map((s) => s.trim())
   .filter(Boolean);
 
+function isTrustedGolivioOrigin(origin) {
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    return hostname.endsWith('golivio.com') || hostname.endsWith('netlify.app');
+  } catch {
+    return false;
+  }
+}
+
 const localOrigins = [
   'http://127.0.0.1:4173',
   'http://localhost:4173',
@@ -35,7 +44,9 @@ app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
     if (!allowedOrigins.length || allowedOrigins.includes('*')) return callback(null, true);
-    if (allowedOrigins.includes(origin) || localOrigins.includes(origin)) return callback(null, true);
+    if (allowedOrigins.includes(origin) || localOrigins.includes(origin) || isTrustedGolivioOrigin(origin)) {
+      return callback(null, true);
+    }
     return callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
