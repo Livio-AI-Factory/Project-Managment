@@ -25,7 +25,11 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || '')
 function isTrustedGolivioOrigin(origin) {
   try {
     const hostname = new URL(origin).hostname.toLowerCase();
-    return hostname.endsWith('golivio.com') || hostname.endsWith('netlify.app');
+    return (
+      hostname.endsWith('golivio.com') ||
+      hostname.endsWith('golivio.ink') ||
+      hostname.endsWith('netlify.app')
+    );
   } catch {
     return false;
   }
@@ -49,7 +53,7 @@ app.use(cors({
     }
     return callback(null, false);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
