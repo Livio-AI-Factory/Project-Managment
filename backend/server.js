@@ -1,4 +1,9 @@
-require('dotenv').config();
+// Load .env only in local development — Railway (and other PaaS) inject
+// environment variables directly, so running dotenv in production risks a
+// stale or incorrect .env file overriding the real runtime variables.
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
 const express = require('express');
 const cors = require('cors');
