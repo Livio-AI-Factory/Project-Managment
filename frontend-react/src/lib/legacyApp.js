@@ -5960,9 +5960,77 @@ function buildLienWaiverPdfAttachment(invId, waiverType){
   const MR=40;
   const CW=W-ML-MR;
   let y=44;
+  const statutoryByType={
+    'Conditional Progress':{
+      section:'Civil Code § 8132',
+      title:'CONDITIONAL WAIVER AND RELEASE ON PROGRESS PAYMENT',
+      notice:'NOTICE: THIS DOCUMENT WAIVES THE CLAIMANT\'S LIEN, STOP PAYMENT NOTICE, AND PAYMENT BOND RIGHTS EFFECTIVE ON RECEIPT OF PAYMENT. A PERSON SHOULD NOT RELY ON THIS DOCUMENT UNLESS SATISFIED THAT THE CLAIMANT HAS RECEIVED PAYMENT.',
+      throughDateLabel:'Through Date:',
+      body:'This document waives and releases lien, stop payment notice, and payment bond rights the claimant has for labor and service provided, and equipment and material delivered, to the customer on this job through the Through Date of this document. Rights based upon labor or service provided, or equipment or material delivered, pursuant to a written change order that has been fully executed by the parties prior to the date that this document is signed by the claimant, are waived and released by this document, unless listed as an Exception below. This document is effective only on the claimant\'s receipt of payment from the financial institution on which the following check is drawn:',
+      paymentFields:[
+        ['Maker of Check:', 'Livio Building Systems'],
+        ['Amount of Check:', data.invAmt],
+        ['Check Payable to:', data.vendorName]
+      ],
+      exceptions:[
+        '(1) Retentions.',
+        '(2) Extras for which the claimant has not received payment.',
+        '(3) The following progress payments for which the claimant has previously given a conditional waiver and release but has not received payment:',
+        'Date(s) of waiver and release: _______________________________',
+        'Amount(s) of unpaid progress payment(s): $_____________________',
+        '(4) Contract rights, including (A) a right based on rescission, abandonment, or breach of contract, and (B) the right to recover compensation for work not compensated by the payment.'
+      ]
+    },
+    'Unconditional Progress':{
+      section:'Civil Code § 8134',
+      title:'UNCONDITIONAL WAIVER AND RELEASE ON PROGRESS PAYMENT',
+      notice:'NOTICE TO CLAIMANT: THIS DOCUMENT WAIVES AND RELEASES LIEN, STOP PAYMENT NOTICE, AND PAYMENT BOND RIGHTS UNCONDITIONALLY AND STATES THAT YOU HAVE BEEN PAID FOR GIVING UP THOSE RIGHTS. THIS DOCUMENT IS ENFORCEABLE AGAINST YOU IF YOU SIGN IT, EVEN IF YOU HAVE NOT BEEN PAID. IF YOU HAVE NOT BEEN PAID, USE A CONDITIONAL WAIVER AND RELEASE FORM.',
+      throughDateLabel:'Through Date:',
+      body:'This document waives and releases lien, stop payment notice, and payment bond rights the claimant has for labor and service provided, and equipment and material delivered, to the customer on this job through the Through Date of this document. Rights based upon labor or service provided, or equipment or material delivered, pursuant to a written change order that has been fully executed by the parties prior to the date that this document is signed by the claimant, are waived and released by this document, unless listed as an Exception below. The claimant has received the following progress payment:',
+      paymentFields:[
+        ['Amount of Progress Payment:', data.invAmt]
+      ],
+      exceptions:[
+        '(1) Retentions.',
+        '(2) Extras for which the claimant has not received payment.',
+        '(3) Contract rights, including (A) a right based on rescission, abandonment, or breach of contract, and (B) the right to recover compensation for work not compensated by the payment.'
+      ]
+    },
+    'Conditional Final':{
+      section:'Civil Code § 8136',
+      title:'CONDITIONAL WAIVER AND RELEASE ON FINAL PAYMENT',
+      notice:'NOTICE: THIS DOCUMENT WAIVES THE CLAIMANT\'S LIEN, STOP PAYMENT NOTICE, AND PAYMENT BOND RIGHTS EFFECTIVE ON RECEIPT OF PAYMENT. A PERSON SHOULD NOT RELY ON THIS DOCUMENT UNLESS SATISFIED THAT THE CLAIMANT HAS RECEIVED PAYMENT.',
+      throughDateLabel:'',
+      body:'This document waives and releases lien, stop payment notice, and payment bond rights the claimant has for labor and service provided, and equipment and material delivered, to the customer on this job. Rights based upon labor or service provided, or equipment or material delivered, pursuant to a written change order that has been fully executed by the parties prior to the date that this document is signed by the claimant, are waived and released by this document, unless listed as an Exception below. This document is effective only on the claimant\'s receipt of payment from the financial institution on which the following check is drawn:',
+      paymentFields:[
+        ['Maker of Check:', 'Livio Building Systems'],
+        ['Amount of Check:', data.invAmt],
+        ['Check Payable to:', data.vendorName]
+      ],
+      exceptions:[
+        'Disputed claims for extras in the amount of: $_____________________'
+      ]
+    },
+    'Unconditional Final':{
+      section:'Civil Code § 8138',
+      title:'UNCONDITIONAL WAIVER AND RELEASE ON FINAL PAYMENT',
+      notice:'NOTICE TO CLAIMANT: THIS DOCUMENT WAIVES AND RELEASES LIEN, STOP PAYMENT NOTICE, AND PAYMENT BOND RIGHTS UNCONDITIONALLY AND STATES THAT YOU HAVE BEEN PAID FOR GIVING UP THOSE RIGHTS. THIS DOCUMENT IS ENFORCEABLE AGAINST YOU IF YOU SIGN IT, EVEN IF YOU HAVE NOT BEEN PAID. IF YOU HAVE NOT BEEN PAID, USE A CONDITIONAL WAIVER AND RELEASE FORM.',
+      throughDateLabel:'',
+      body:'This document waives and releases lien, stop payment notice, and payment bond rights the claimant has for all labor and service provided, and equipment and material delivered, to the customer on this job. Rights based upon labor or service provided, or equipment or material delivered, pursuant to a written change order that has been fully executed by the parties prior to the date that this document is signed by the claimant, are waived and released by this document, unless listed as an Exception below. The claimant has been paid in full.',
+      paymentFields:[],
+      exceptions:[
+        'Disputed claims for extras in the amount of: $_____________________'
+      ]
+    }
+  };
+  const statutory=statutoryByType[waiverType]||statutoryByType['Conditional Progress'];
+  const customerName='Livio Building Systems';
+  const ownerName=data.p?.client||data.projName||'';
+  const throughDate=data.invDate||new Date().toLocaleDateString('en-US');
 
-  const writeBlock=(text,size=10,color=[65,65,65],gap=14)=>{
+  const writeBlock=(text,size=10,color=[65,65,65],gap=14,font='normal')=>{
     doc.setFont('helvetica','normal');
+    if(font!=='normal') doc.setFont('helvetica',font);
     doc.setFontSize(size);
     doc.setTextColor(...color);
     const lines=doc.splitTextToSize(String(text||''),CW);
@@ -5973,48 +6041,72 @@ function buildLienWaiverPdfAttachment(invId, waiverType){
   doc.setFillColor(26,107,196);
   doc.rect(0,0,W,78,'F');
   doc.setFont('helvetica','bold');
-  doc.setFontSize(20);
+  doc.setFontSize(18);
   doc.setTextColor(255,255,255);
   doc.text('LIVIO BUILDING SYSTEMS',ML,36);
-  doc.setFontSize(10);
-  doc.text('Lien Waiver for Signature',ML,56);
+  doc.setFontSize(9);
+  doc.text('California Statutory Lien Waiver',ML,56);
 
-  y=108;
+  y=100;
   doc.setFont('helvetica','bold');
-  doc.setFontSize(17);
+  doc.setFontSize(15);
   doc.setTextColor(12,27,46);
-  doc.text(data.waiverDesc,ML,y);
-  y+=24;
+  writeBlock(statutory.title,15,[12,27,46],20,'bold');
+  writeBlock(statutory.section,9,[110,110,110],14);
+  writeBlock(statutory.notice,9,[135,35,35],13,'bold');
+  y+=4;
 
-  writeBlock(`Project: ${data.projName}`,10,[80,80,80]);
-  writeBlock(`Address: ${data.projAddr||'-'}`,10,[80,80,80]);
-  writeBlock(`Invoice #: ${data.invNo}`,10,[80,80,80]);
-  writeBlock(`Invoice Date: ${data.invDate||'-'}`,10,[80,80,80]);
-  writeBlock(`Payment Amount: ${data.invAmt}`,10,[80,80,80]);
-  y+=8;
+  writeBlock('Identifying Information',11,[26,107,196],16,'bold');
+  writeBlock(`Name of Claimant: ${data.vendorName}`,10,[70,70,70],13);
+  writeBlock(`Name of Customer: ${customerName}`,10,[70,70,70],13);
+  writeBlock(`Job Location: ${data.projAddr||data.projName||'-'}`,10,[70,70,70],13);
+  writeBlock(`Owner: ${ownerName||'-'}`,10,[70,70,70],13);
+  if(statutory.throughDateLabel){
+    writeBlock(`${statutory.throughDateLabel} ${throughDate}`,10,[70,70,70],13);
+  }
+  y+=6;
 
   doc.setDrawColor(26,107,196);
   doc.setLineWidth(1);
   doc.line(ML,y,W-MR,y);
   y+=18;
 
-  writeBlock(data.body.replace(/^Dear .*?,\n\n/,'').replace(/\n\nBest regards,[\s\S]*$/,''),10,[55,55,55],15);
+  writeBlock(statutory.title.includes('UNCONDITIONAL') ? 'Unconditional Waiver and Release' : 'Conditional Waiver and Release',11,[26,107,196],16,'bold');
+  writeBlock(statutory.body,9.5,[55,55,55],14);
+  statutory.paymentFields.forEach(([label,value])=>{
+    writeBlock(`${label} ${value||''}`,10,[70,70,70],13);
+  });
   y+=18;
+
+  writeBlock('Exceptions',11,[26,107,196],16,'bold');
+  statutory.exceptions.forEach((line)=>{
+    writeBlock(line,9.5,[55,55,55],14);
+  });
+  y+=16;
 
   doc.setFont('helvetica','bold');
   doc.setFontSize(10);
   doc.setTextColor(26,107,196);
-  doc.text('Authorized Signature',ML,y);
-  doc.text('Date',W-MR-70,y);
+  doc.text('Signature',ML,y);
   y+=30;
   doc.setDrawColor(140,140,140);
   doc.setLineWidth(0.8);
-  doc.line(ML,y,W-150,y);
-  doc.line(W-120,y,W-MR,y);
+  doc.line(ML,y,W-MR,y);
   y+=32;
-  doc.text('Printed Name / Title',ML,y);
+  doc.text('Claimant\'s Signature',ML,y);
+  doc.text('Date of Signature',W-MR-110,y);
+  y+=30;
+  doc.line(ML,y,W-180,y);
+  doc.line(W-150,y,W-MR,y);
+  y+=28;
+  doc.text('Claimant\'s Title',ML,y);
   y+=30;
   doc.line(ML,y,W-240,y);
+
+  doc.setFont('helvetica','italic');
+  doc.setFontSize(8);
+  doc.setTextColor(120,120,120);
+  doc.text(`Prefilled from project ${data.projName} / invoice ${data.invNo}`,ML,doc.internal.pageSize.getHeight()-24);
 
   const dataUri=doc.output('datauristring');
   const content=String(dataUri).split(',')[1]||'';
