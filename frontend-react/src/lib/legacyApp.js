@@ -4337,6 +4337,7 @@ async function sendAppEmail(payload){
     fromName:payload.fromName||getEmailFromName()
   };
   if(payload.replyTo) body.replyTo=payload.replyTo;
+  if(Array.isArray(payload.attachments)&&payload.attachments.length) body.attachments=payload.attachments;
   const res=await fetch(apiBase+'/email/send',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -5916,9 +5917,9 @@ function generateVendorContract(vid){
   toast('🖨 Contract opened — Print → Save as PDF');
 }
 
-function openLienEmail(invId, waiverType){
-  const p=proj(); if(!p)return;
-  const inv=(p.invoices||[]).find(x=>x.id===invId); if(!inv)return;
+function getLienWaiverEmailData(invId, waiverType){
+  const p=proj(); if(!p)return null;
+  const inv=(p.invoices||[]).find(x=>x.id===invId); if(!inv)return null;
   const q=(p.quotes||[]).find(x=>x.id===inv.quoteId);
   const vendorName=inv.vendor||(q?q.vendor:'')||'Vendor';
   const vendorEmail=inv.vendorEmail||(()=>{
@@ -5930,6 +5931,105 @@ function openLienEmail(invId, waiverType){
   const invNo=inv.invoiceNo||invId;
   const invAmt=fmtMoney(inv.amount||0);
   const invDate=inv.invoiceDate?fmtDate(inv.invoiceDate):'';
+
+  const waiverDescriptions={
+    'Conditional Progress':'Conditional Waiver and Release on Progress Payment',
+    'Unconditional Progress':'Conditional Waiver and Release on Progress Payment',
+    'Conditional Final':'Conditional Waiver and Release on Final Payment',
+    'Unconditional Final':'Conditional Waiver and Release on Final Payment'
+  };
+  const waiverDesc=waiverDescriptions[waiverType]||waiverType+' Lien Waiver';
+
+  const conditionalNote=waiverType.startsWith('Conditional')
+    ?'\n\nNote: This waiver is CONDITIONAL and becomes effective only upon receipt and clearance of the payment referenced herein.'
+    :'\n\nNote: This waiver is UNCONDITIONAL. By signing, you waive all lien rights for the payment described above, regardless of whether payment has been received.';
+
+  const body=`Dear ${vendorName},\n\nPlease find enclosed the ${waiverDesc} for the following:\n\nProject: ${projName}\nAddress: ${projAddr}\nInvoice #: ${invNo}\nInvoice Date: ${invDate}\nPayment Amount: ${invAmt}${conditionalNote}\n\nPlease sign and return this waiver at your earliest convenience.\n\nBest regards,\nLivio Building Systems`;
+
+  return { p, inv, q, vendorName, vendorEmail, projName, projAddr, invNo, invAmt, invDate, waiverDesc, body };
+}
+function buildLienWaiverPdfAttachment(invId, waiverType){
+  const data=getLienWaiverEmailData(invId, waiverType);
+  if(!data) throw new Error('Lien waiver data not found.');
+  if(!window.jspdf||!window.jspdf.jsPDF) throw new Error('PDF library not loaded yet. Try again.');
+
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'letter'});
+  const W=doc.internal.pageSize.getWidth();
+  const ML=40;
+  const MR=40;
+  const CW=W-ML-MR;
+  let y=44;
+
+  const writeBlock=(text,size=10,color=[65,65,65],gap=14)=>{
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(size);
+    doc.setTextColor(...color);
+    const lines=doc.splitTextToSize(String(text||''),CW);
+    doc.text(lines,ML,y);
+    y+=Math.max(gap,lines.length*gap);
+  };
+
+  doc.setFillColor(26,107,196);
+  doc.rect(0,0,W,78,'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(20);
+  doc.setTextColor(255,255,255);
+  doc.text('LIVIO BUILDING SYSTEMS',ML,36);
+  doc.setFontSize(10);
+  doc.text('Lien Waiver for Signature',ML,56);
+
+  y=108;
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(17);
+  doc.setTextColor(12,27,46);
+  doc.text(data.waiverDesc,ML,y);
+  y+=24;
+
+  writeBlock(`Project: ${data.projName}`,10,[80,80,80]);
+  writeBlock(`Address: ${data.projAddr||'-'}`,10,[80,80,80]);
+  writeBlock(`Invoice #: ${data.invNo}`,10,[80,80,80]);
+  writeBlock(`Invoice Date: ${data.invDate||'-'}`,10,[80,80,80]);
+  writeBlock(`Payment Amount: ${data.invAmt}`,10,[80,80,80]);
+  y+=8;
+
+  doc.setDrawColor(26,107,196);
+  doc.setLineWidth(1);
+  doc.line(ML,y,W-MR,y);
+  y+=18;
+
+  writeBlock(data.body.replace(/^Dear .*?,\n\n/,'').replace(/\n\nBest regards,[\s\S]*$/,''),10,[55,55,55],15);
+  y+=18;
+
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10);
+  doc.setTextColor(26,107,196);
+  doc.text('Authorized Signature',ML,y);
+  doc.text('Date',W-MR-70,y);
+  y+=30;
+  doc.setDrawColor(140,140,140);
+  doc.setLineWidth(0.8);
+  doc.line(ML,y,W-150,y);
+  doc.line(W-120,y,W-MR,y);
+  y+=32;
+  doc.text('Printed Name / Title',ML,y);
+  y+=30;
+  doc.line(ML,y,W-240,y);
+
+  const dataUri=doc.output('datauristring');
+  const content=String(dataUri).split(',')[1]||'';
+  const safeInv=(data.invNo||'Lien-Waiver').replace(/[^a-z0-9-_]+/gi,'_');
+  const safeType=String(waiverType||'waiver').replace(/[^a-z0-9-_]+/gi,'_');
+  return {
+    filename:`${safeInv}-${safeType}.pdf`,
+    content,
+    contentType:'application/pdf'
+  };
+}
+function openLienEmail(invId, waiverType){
+  const data=getLienWaiverEmailData(invId, waiverType);
+  if(!data)return;
+  const { vendorName, projName, projAddr, invNo, invAmt, invDate }=data;
 
   const waiverDescriptions={
     'Conditional Progress':'Conditional Waiver and Release on Progress Payment',
@@ -5948,7 +6048,7 @@ function openLienEmail(invId, waiverType){
   vEl('lien-email-invid').value=invId;
   vEl('lien-email-type').value=waiverType;
   vEl('lien-email-title').textContent=waiverType+' Lien Waiver';
-  vEl('lien-email-to').value=vendorEmail;
+  vEl('lien-email-to').value=data.vendorEmail;
   vEl('lien-email-subject').value=waiverDesc+' — '+projName+' / Inv #'+invNo;
   vEl('lien-email-body').value=body;
   const statusEl=vEl('lien-email-status');
@@ -5970,8 +6070,19 @@ function sendLienEmail(){
   const to=vEl('lien-email-to').value.trim();
   const subject=vEl('lien-email-subject').value.trim();
   const body=vEl('lien-email-body').value.trim();
+  const invId=vEl('lien-email-invid')?.value;
+  const waiverType=vEl('lien-email-type')?.value;
   if(!to){toast('⚠ Recipient email is required');return;}
-  sendAppEmail({to,subject,message:body})
+  let attachments=[];
+  try{
+    if(invId&&waiverType){
+      attachments=[buildLienWaiverPdfAttachment(invId, waiverType)];
+    }
+  }catch(err){
+    toast('âš  Unable to attach lien waiver PDF: '+(err.message||err),'error',6000);
+    return;
+  }
+  sendAppEmail({to,subject,message:body,attachments})
     .then(function(){_saveLienSent(to);closeLienEmail();toast('✉ Lien waiver email sent');})
     .catch(function(err){console.error('Email error:',err);toast('⚠ Email send failed: '+err.message,'error',6000);});
 }
