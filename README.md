@@ -1,4 +1,4 @@
-# Livio CRM
+# Livio PMS
 
 This repository contains the Livio CRM frontend and backend applications.
 
