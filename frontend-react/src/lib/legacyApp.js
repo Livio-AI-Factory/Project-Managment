@@ -6539,6 +6539,65 @@ sendContractEmailModal = function(){
     .catch(function(err){console.error('Email error:',err);toast('âš  Email send failed: '+err.message,'error',6000);});
 }
 
+function isVendorContractPdfFile(file){
+  if(!file) return false;
+  const name=String(file.name||file.filename||'').toLowerCase();
+  const type=String(file.type||file.mimeType||file.contentType||'').toLowerCase();
+  return name.endsWith('.pdf') || type.includes('pdf');
+}
+
+function blobToBase64Content(blob){
+  return new Promise(function(resolve,reject){
+    const reader=new FileReader();
+    reader.onload=function(){
+      const result=String(reader.result||'');
+      resolve(result.split(',')[1]||'');
+    };
+    reader.onerror=function(){
+      reject(reader.error||new Error('File read failed'));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function buildEmailAttachmentFromStoredFile(file){
+  const blob=await fetchFileBlob(file);
+  const content=await blobToBase64Content(blob);
+  return {
+    filename:file.name||file.filename||'contract.pdf',
+    content,
+    contentType:file.type||file.mimeType||file.contentType||blob.type||'application/pdf'
+  };
+}
+
+async function getVendorContractEmailAttachments(vid){
+  const p=proj(); if(!p) throw new Error('Project not found.');
+  const v=(p.vendors||[]).find(x=>x.id===vid); if(!v) throw new Error('Vendor contract not found.');
+  const pdfFiles=(v.files||[]).filter(isVendorContractPdfFile);
+  if(pdfFiles.length){
+    return await Promise.all(pdfFiles.map(buildEmailAttachmentFromStoredFile));
+  }
+  return [buildVendorContractPdfAttachment(vid)];
+}
+
+sendContractEmailModal = async function(){
+  const to=vEl('cemail-to').value.trim();
+  const subject=vEl('cemail-subject').value.trim();
+  const body=vEl('cemail-body').value.trim();
+  const vid=vEl('cemail-vid').value.trim();
+  if(!to){toast('Recipient email is required');return;}
+  let attachments=[];
+  try{
+    if(vid) attachments=await getVendorContractEmailAttachments(vid);
+  }catch(err){
+    toast('Could not attach contract PDF: '+err.message,'error',6000);
+    return;
+  }
+  sendAppEmail({to,subject,message:body,attachments})
+    .then(function(){closeContractEmailModal();toast('Contract email sent with PDF attachment');})
+    .catch(function(err){console.error('Email error:',err);toast('Email send failed: '+err.message,'error',6000);});
+}
+
 function delVendor(vid){
   const p=proj();if(!p||!confirm('Delete this vendor contract?'))return;
   p.vendors=(p.vendors||[]).filter(x=>x.id!==vid);
