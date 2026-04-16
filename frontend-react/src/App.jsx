@@ -90,6 +90,10 @@ export default function App() {
               <div className="fr" style={{margin:0}}><label className="fl">Trade / Specialty</label><input className="fi" id="vdir-trade" placeholder="Plumbing, HVAC, Electrical…"/></div>
               <div className="fr" style={{margin:0}}><label className="fl">License Number</label><input className="fi" id="vdir-license" placeholder="LIC-1234567"/></div>
             </div>
+            <div className="fr" style={{margin:0}}>
+              <label className="fl">Address</label>
+              <input className="fi" id="vdir-address" placeholder="121 Main St #563, Los Altos, CA 94022"/>
+            </div>
             <div style={{borderTop:'1px solid var(--border)',paddingTop:'10px',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.6px',color:'var(--muted)'}}>🏦 Payment / Banking Info</div>
             <div className="fg">
               <div className="fr" style={{margin:0}}><label className="fl">Bank Name</label><input className="fi" id="vdir-bank" placeholder="Chase Bank"/></div>

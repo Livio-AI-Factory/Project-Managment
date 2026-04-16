@@ -408,7 +408,7 @@ function loadDB(){
   }catch(e){
     console.warn('Local DB load failed:',e?.message||e);
   }
-  return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera',activeProjectId:'proj_madera'};
+  return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera',activeProjectId:'proj_madera',vendorDirectory:[]};
 }
 function saveDB(){
   try{
@@ -4048,6 +4048,7 @@ function normalizeDBShape(input){
   const db={
     ...raw,
     projects:fallbackProjects,
+    vendorDirectory:Array.isArray(raw.vendorDirectory)?raw.vendorDirectory.map((v,i)=>normalizeVDirEntry(v,i)):[],
     activeId,
     activeProjectId:activeId
   };
@@ -7276,8 +7277,62 @@ function doSetupPass(){
 
 // ════ VENDOR DIRECTORY ════════════════════════════════════════════
 const VDIR_KEY = 'dt_vendor_directory';
-function getVDirList(){try{return JSON.parse(localStorage.getItem(VDIR_KEY)||'[]')}catch{return[]}}
-function saveVDirList(list){localStorage.setItem(VDIR_KEY,JSON.stringify(list))}
+let vdirMigratedToSharedDb = false;
+function normalizeVDirEntry(entry, index=0){
+  const raw=(entry&&typeof entry==='object')?entry:{};
+  return {
+    ...raw,
+    id: raw.id || ('vdir_'+Math.random().toString(36).slice(2,10)+'_'+index),
+    name: String(raw.name||raw.contactName||raw.contact||'').trim(),
+    company: String(raw.company||raw.companyName||raw.businessName||'').trim(),
+    phone: String(raw.phone||raw.phoneNumber||raw.mobile||'').trim(),
+    email: String(raw.email||raw.emailAddress||'').trim(),
+    address: String(raw.address||raw.addr||raw.streetAddress||raw.location||'').trim(),
+    trade: String(raw.trade||raw.specialty||raw.category||'').trim(),
+    license: String(raw.license||raw.licenseNo||raw.licenseNumber||'').trim(),
+    bank: String(raw.bank||raw.bankName||'').trim(),
+    acctType: String(raw.acctType||raw.bankAcctType||raw.accountType||'').trim(),
+    acct: String(raw.acct||raw.bankAccount||raw.accountNumber||'').trim(),
+    routing: String(raw.routing||raw.routingNo||raw.routingNumber||'').trim(),
+    zelle: String(raw.zelle||raw.zelleId||raw.zelleEmail||'').trim(),
+    notes: String(raw.notes||raw.description||'').trim(),
+  };
+}
+function getLegacyVDirList(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(VDIR_KEY)||'[]');
+    return Array.isArray(raw) ? raw.map((v,i)=>normalizeVDirEntry(v,i)) : [];
+  }catch{
+    return [];
+  }
+}
+function getVDirList(){
+  const shared=Array.isArray(DB?.vendorDirectory) ? DB.vendorDirectory.map((v,i)=>normalizeVDirEntry(v,i)) : [];
+  if(shared.length){
+    DB.vendorDirectory=shared;
+    return shared;
+  }
+  const legacy=getLegacyVDirList();
+  if(!vdirMigratedToSharedDb && legacy.length && DB){
+    vdirMigratedToSharedDb=true;
+    DB.vendorDirectory=legacy;
+    try{ saveDB(); }catch(e){ console.warn('Vendor directory migration save failed:',e?.message||e); }
+    return DB.vendorDirectory;
+  }
+  return legacy;
+}
+function saveVDirList(list){
+  const normalized=(Array.isArray(list)?list:[]).map((v,i)=>normalizeVDirEntry(v,i));
+  if(DB){
+    DB.vendorDirectory=normalized;
+    saveDB();
+  }
+  try{
+    localStorage.setItem(VDIR_KEY,JSON.stringify(normalized));
+  }catch(e){
+    console.warn('Vendor directory local save failed:',e?.message||e);
+  }
+}
 
 function renderVendorDirectory(){
   const el=vEl('vdir-content'); if(!el)return;
@@ -7304,6 +7359,10 @@ function renderVendorDirectory(){
         ${v.license?`<div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">License #</div><div style="font-weight:600">${v.license}</div></div>`:''}
         ${v.trade?`<div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px">Trade</div><div style="font-weight:600">${v.trade}</div></div>`:''}
       </div>
+      ${v.address?`<div style="padding:0 16px 12px;font-size:11px">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Address</div>
+        <div style="font-weight:600;line-height:1.5;color:var(--text)">${v.address}</div>
+      </div>`:''}
       ${(v.bank||v.acct||v.routing||v.zelle)?`
       <div style="padding:10px 16px;border-top:1px solid var(--border);background:var(--bg)">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">🏦 Payment Info</div>
@@ -7329,6 +7388,7 @@ function openVDirModal(id){
   document.getElementById('vdir-company').value=v.company||'';
   document.getElementById('vdir-phone').value=v.phone||'';
   document.getElementById('vdir-email').value=v.email||'';
+  document.getElementById('vdir-address').value=v.address||'';
   document.getElementById('vdir-trade').value=v.trade||'';
   document.getElementById('vdir-license').value=v.license||'';
   document.getElementById('vdir-bank').value=v.bank||'';
@@ -7345,7 +7405,7 @@ function saveVDir(){
   const company=document.getElementById('vdir-company').value.trim();
   if(!name&&!company){toast('⚠ Name or Company is required');return;}
   const id=document.getElementById('vdir-id').value||('vdir_'+Math.random().toString(36).slice(2,10));
-  const v={id,name,company,phone:document.getElementById('vdir-phone').value.trim(),email:document.getElementById('vdir-email').value.trim(),trade:document.getElementById('vdir-trade').value.trim(),license:document.getElementById('vdir-license').value.trim(),bank:document.getElementById('vdir-bank').value.trim(),acctType:document.getElementById('vdir-acct-type').value,acct:document.getElementById('vdir-acct').value.trim(),routing:document.getElementById('vdir-routing').value.trim(),zelle:document.getElementById('vdir-zelle').value.trim(),notes:document.getElementById('vdir-notes').value.trim()};
+  const v={id,name,company,phone:document.getElementById('vdir-phone').value.trim(),email:document.getElementById('vdir-email').value.trim(),address:document.getElementById('vdir-address').value.trim(),trade:document.getElementById('vdir-trade').value.trim(),license:document.getElementById('vdir-license').value.trim(),bank:document.getElementById('vdir-bank').value.trim(),acctType:document.getElementById('vdir-acct-type').value,acct:document.getElementById('vdir-acct').value.trim(),routing:document.getElementById('vdir-routing').value.trim(),zelle:document.getElementById('vdir-zelle').value.trim(),notes:document.getElementById('vdir-notes').value.trim()};
   const list=getVDirList();
   const idx=list.findIndex(x=>x.id===id);
   if(idx>=0)list[idx]=v; else list.push(v);
