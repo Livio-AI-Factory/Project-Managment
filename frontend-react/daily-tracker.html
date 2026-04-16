@@ -628,39 +628,8 @@ const CL={
   ]}
 };
 
-// ── DISCUSSION SEED DATA ──
-const DISC_SEED = [
-  {id:"d1",num:1,title:"Concrete – 4 inch x 2 inch patch",status:"in-progress",assignedTo:"GilGil",notes:"GilGil said he will do gas line work as per drawing. This includes sewer line and water line.",subtasks:[{id:"st1",text:"Gas line work as per drawing",done:false},{id:"st2",text:"Sewer line coordination",done:false},{id:"st3",text:"Water line coordination",done:false}],comments:[],date:"03/25"},
-  {id:"d2",num:2,title:"Sewer line photos",status:"done",assignedTo:"",notes:"Sewer line photos taken and documented.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d3",num:3,title:"Sewer line, water line, and gas line",status:"done",assignedTo:"",notes:"All three utility lines coordinated and confirmed.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d4",num:4,title:"HVAC end-to-end work schedule",status:"done",assignedTo:"",notes:"Ducts are installed. Copper piping done. Wiring done. Machine payment: 10k + 10k for installation. Ready for inspection.",subtasks:[{id:"st4",text:"Ducts installed",done:true},{id:"st5",text:"Copper piping done",done:true},{id:"st6",text:"Wiring done",done:true},{id:"st7",text:"Machine payment – 10k + 10k for installation",done:true},{id:"st8",text:"Schedule inspection",done:false}],comments:[],date:"03/25"},
-  {id:"d5",num:5,title:"T24 – QII Confirmation",status:"done",assignedTo:"",notes:"T24 QII confirmed.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d6",num:6,title:"Bill – time for submission",status:"in-progress",assignedTo:"",notes:"Two to three weeks lead time for bill submission.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d7",num:7,title:"Swimming pool project (track separately)",status:"done",assignedTo:"",notes:"Confirmed for Monday. To be tracked as a separate project.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d8",num:8,title:"Swimming pool – create separate checklist / project milestones",status:"in-progress",assignedTo:"",notes:"Full milestone breakdown created for the swimming pool project.",subtasks:[
-    {id:"st10",text:"Initial Deposit – Contract signing",done:false},
-    {id:"st11",text:"Design, Engineering & Permit Submission",done:false},
-    {id:"st12",text:"Excavation Completed",done:false},
-    {id:"st13",text:"Pool Layout, Leveling & Formwork Preparation",done:false},
-    {id:"st14",text:"Rebar Installation (floor, walls, steps, benches, bond beam)",done:false},
-    {id:"st15",text:"Plumbing Completed",done:false},
-    {id:"st16",text:"Gunite Applied (entire pool shell)",done:false},
-    {id:"st17",text:"Tile Installation (pool perimeter)",done:false},
-    {id:"st18",text:"Coping Installation (travertine around pool)",done:false},
-    {id:"st19",text:"Equipment Installation",done:false},
-    {id:"st20",text:"Pool Cover Ordered",done:false},
-    {id:"st21",text:"Pebble Finish Applied",done:false},
-    {id:"st22",text:"Pool Cover Installed",done:false},
-    {id:"st23",text:"Project Completion & Final Balance",done:false},
-  ],comments:[],date:"03/25"},
-  {id:"d9",num:9,title:"PGE Scope for excavation – Gas and Electric",status:"done",assignedTo:"",notes:"PGE scope confirmed for gas and electric excavation.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d10",num:10,title:"Densglass installation",status:"done",assignedTo:"Flavio",notes:"Confirmation received from Flavio.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d11",num:11,title:"Create web app for Dan – daily progress and checklist",status:"in-progress",assignedTo:"",notes:"Web app to store daily progress and maintain checklist. Currently in progress.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d12",num:12,title:"Schedule Inspection – Densglass – Underlayment",status:"done",assignedTo:"",notes:"Scheduled for Tuesday (latest available).",subtasks:[],comments:[],date:"03/25"},
-  {id:"d13",num:13,title:"Utility Dashboard",status:"done",assignedTo:"",notes:"Utility dashboard completed.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d14",num:14,title:"Roofing work timeline",status:"done",assignedTo:"Lorenzo",notes:"Lorenzo agreed to complete underlayment by Tuesday.",subtasks:[],comments:[],date:"03/25"},
-  {id:"d15",num:15,title:"Washing Machine in ADU (Refrigerator)",status:"pending",assignedTo:"",notes:"For discussion.",subtasks:[],comments:[],date:"03/25"},
-];
+// ── DISCUSSION DEFAULTS ──
+const DISC_SEED = [];
 
 // ── STATE ──
 const DT_STATE_KEY = 'dt_state';
@@ -714,7 +683,7 @@ function readFallbackState(projectId=null){
   try{ meta = JSON.parse(localStorage.getItem(keys.state)||'{}') || {}; }catch{}
   return {
     days: Array.isArray(daysState) ? daysState : [],
-    discItems: Array.isArray(discState) ? discState : cloneData(DISC_SEED, []),
+  discItems: Array.isArray(discState) ? discState : [],
     clients: Array.isArray(clientsState) ? clientsState : [],
     curDay: meta.curDay ?? null,
     curDiscId: meta.curDiscId ?? null,
@@ -734,7 +703,7 @@ function buildTrackerState(){
 function applyTrackerState(raw){
   const state = raw && typeof raw === 'object' ? raw : {};
   days = Array.isArray(state.days) ? cloneData(state.days, []) : [];
-  discItems = Array.isArray(state.discItems) ? cloneData(state.discItems, []) : cloneData(DISC_SEED, []);
+  discItems = Array.isArray(state.discItems) ? cloneData(state.discItems, []) : [];
   clients = Array.isArray(state.clients) ? cloneData(state.clients, []) : [];
   curDay = state.curDay && days.some(d=>d.id===state.curDay) ? state.curDay : (days.length ? days[days.length-1].id : null);
   curDiscId = state.curDiscId && discItems.some(d=>d.id===state.curDiscId) ? state.curDiscId : null;
@@ -952,7 +921,7 @@ function renderDiscMain(){
       <div class="disc-page-icon">💬</div>
       Discussion Log
     </div>
-    <div class="disc-page-sub">Meeting notes, action items, and project decisions — Discussion 03/25</div>
+    <div class="disc-page-sub">Meeting notes, action items, and project decisions for this project.</div>
   </div>
   <div class="disc-stats">
     <div class="s-card"><div class="s-ico" style="background:var(--pd)">💬</div><div><div class="s-val" style="color:var(--purple)">${total}</div><div class="s-lbl">Total Items</div></div></div>
