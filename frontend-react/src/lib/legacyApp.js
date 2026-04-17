@@ -6022,7 +6022,7 @@ function buildVendorContractPdfAttachment(vid){
 
   const { p, v, vdir }=data;
   const { jsPDF }=window.jspdf;
-  const doc=new jsPDF({unit:'pt',format:'letter'});
+  const doc=new jsPDF({unit:'pt',format:'legal'});
   const pageW=doc.internal.pageSize.getWidth();
   const pageH=doc.internal.pageSize.getHeight();
   const left=40;
