@@ -6570,13 +6570,256 @@ async function buildEmailAttachmentFromStoredFile(file){
   };
 }
 
-async function getVendorContractEmailAttachments(vid){
-  const p=proj(); if(!p) throw new Error('Project not found.');
-  const v=(p.vendors||[]).find(x=>x.id===vid); if(!v) throw new Error('Vendor contract not found.');
-  const pdfFiles=(v.files||[]).filter(isVendorContractPdfFile);
-  if(pdfFiles.length){
-    return await Promise.all(pdfFiles.map(buildEmailAttachmentFromStoredFile));
+buildVendorContractPdfAttachment = function(vid){
+  const data=getVendorContractEmailData(vid);
+  if(!data) throw new Error('Vendor contract not found.');
+  if(!window.jspdf||!window.jspdf.jsPDF) throw new Error('PDF library not loaded yet. Try again.');
+
+  const { p, v, vdir }=data;
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'letter'});
+  const pageW=doc.internal.pageSize.getWidth();
+  const pageH=doc.internal.pageSize.getHeight();
+  const left=38;
+  const right=38;
+  const width=pageW-left-right;
+  const navy=[12,27,46];
+  const blue=[26,107,196];
+  const muted=[107,106,100];
+  const text=[26,25,23];
+  const border=[224,221,213];
+  let y=48;
+
+  const newPage=function(){
+    doc.addPage();
+    y=48;
+  };
+  const ensureSpace=function(needed){
+    if(y+(needed||24)>pageH-42) newPage();
+  };
+  const setFont=function(size,style,color){
+    const useColor=color||text;
+    doc.setFont('helvetica',style||'normal');
+    doc.setFontSize(size);
+    doc.setTextColor(useColor[0],useColor[1],useColor[2]);
+  };
+  const writeWrapped=function(value,x,maxWidth,size,style,color,lineGap){
+    const raw=String(value||'').trim();
+    if(!raw) return 0;
+    setFont(size||10,style||'normal',color||text);
+    const lines=doc.splitTextToSize(raw,maxWidth);
+    doc.text(lines,x,y);
+    const height=lines.length*(lineGap||13);
+    y+=height;
+    return height;
+  };
+  const drawHr=function(spaceBefore,spaceAfter){
+    y+=(spaceBefore||0);
+    ensureSpace(8);
+    doc.setDrawColor(navy[0],navy[1],navy[2]);
+    doc.setLineWidth(1.2);
+    doc.line(left,y,pageW-right,y);
+    y+=(spaceAfter||14);
+  };
+  const drawSectionTitle=function(title){
+    ensureSpace(26);
+    setFont(10,'bold',navy);
+    doc.text(String(title||'').toUpperCase(),left,y);
+    y+=10;
+    doc.setDrawColor(navy[0],navy[1],navy[2]);
+    doc.setLineWidth(1);
+    doc.line(left,y,pageW-right,y);
+    y+=18;
+  };
+  const drawDetailRow=function(label,value){
+    ensureSpace(18);
+    const labelX=left;
+    const valueX=left+210;
+    setFont(10,'bold',text);
+    doc.text(label,labelX,y);
+    const isMoney=label==='Contract Value';
+    setFont(isMoney?16:10.5,isMoney?'bold':'normal',isMoney?navy:text);
+    doc.text(String(value||'-'),valueX,y);
+    y+=20;
+  };
+  const drawBox=function(x,boxY,boxW,title,lines){
+    const innerPad=18;
+    const safeLines=(lines||[]).filter(Boolean).map(function(line){return String(line);});
+    let contentHeight=44;
+    safeLines.forEach(function(line,index){
+      const wrapped=doc.splitTextToSize(line,boxW-innerPad*2);
+      contentHeight+=wrapped.length*(index===0?15:13)+(index===0?4:2);
+    });
+    const boxH=Math.max(92,contentHeight);
+    doc.setDrawColor(border[0],border[1],border[2]);
+    doc.roundedRect(x,boxY,boxW,boxH,6,6,'S');
+    let boxTextY=boxY+22;
+    setFont(9,'bold',muted);
+    doc.text(String(title||'').toUpperCase(),x+innerPad,boxTextY);
+    boxTextY+=22;
+    safeLines.forEach(function(line,index){
+      const fontSize=index===0?14:10;
+      const fontStyle=index===0?'bold':'normal';
+      const lineColor=String(line).includes('@')?blue:(index===0?navy:muted);
+      setFont(fontSize,fontStyle,lineColor);
+      const wrapped=doc.splitTextToSize(line,boxW-innerPad*2);
+      doc.text(wrapped,x+innerPad,boxTextY);
+      boxTextY+=wrapped.length*(index===0?15:13)+(index===0?4:2);
+    });
+    return boxH;
+  };
+
+  const projectAddress=getProjectAddressLine(p);
+  const permitLabel=p.permit||'-';
+  const vendorAddress=v.address||vdir?.address||'';
+  const vendorEmail=v.vendorEmail||vdir?.email||'';
+  const contractDate=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+
+  ensureSpace(92);
+  setFont(30,'bold',navy);
+  doc.text('LIVI',left,y);
+  const liviWidth=doc.getTextWidth('LIVI');
+  setFont(30,'bold',blue);
+  doc.text('O',left+liviWidth,y);
+  setFont(11,'normal',muted);
+  doc.text('Building Systems',left,y+26);
+
+  const rightX=pageW-right;
+  setFont(10,'normal',muted);
+  doc.text('Project',rightX,y,{align:'right'});
+  setFont(16,'bold',text);
+  doc.text(p.name||'Project',rightX,y+22,{align:'right'});
+  setFont(10,'normal',muted);
+  const rightLines=doc.splitTextToSize(projectAddress,220);
+  doc.text(rightLines,rightX,y+40,{align:'right'});
+  doc.text('Permit: '+permitLabel,rightX,y+58+((rightLines.length-1)*12),{align:'right'});
+  y+=78;
+
+  drawHr(0,34);
+
+  setFont(20,'bold',navy);
+  doc.text('SUBCONTRACT AGREEMENT',pageW/2,y,{align:'center'});
+  y+=22;
+  setFont(11,'normal',muted);
+  doc.text('Contract No: '+(v.contractNo||'-')+'  •  Date: '+contractDate,pageW/2,y,{align:'center'});
+  y+=34;
+
+  const gap=18;
+  const boxW=(width-gap)/2;
+  const ownerLines=[
+    LIVIO_COMPANY_NAME,
+    LIVIO_OFFICE_ADDRESS,
+    'Project: '+(p.name||''),
+    projectAddress
+  ];
+  const vendorLines=[
+    v.vendor||'Subcontractor',
+    vendorAddress,
+    vendorEmail
+  ];
+  const boxY=y;
+  const leftBoxH=drawBox(left,boxY,boxW,'Owner / General Contractor',ownerLines);
+  const rightBoxH=drawBox(left+boxW+gap,boxY,boxW,'Subcontractor',vendorLines);
+  y=boxY+Math.max(leftBoxH,rightBoxH)+28;
+
+  drawSectionTitle('1. Contract Details');
+  drawDetailRow('Contract Type',v.contractType||'-');
+  drawDetailRow('Contract Value',fmtMoney(v.amount||0));
+  drawDetailRow('Start Date',v.startDate||'-');
+  drawDetailRow('End Date',v.endDate||'-');
+  drawDetailRow('CBC / Code Reference','CBC 2022 · CALGreen 2022 · Title 24');
+  y+=10;
+
+  drawSectionTitle('2. Scope of Work');
+  writeWrapped(v.scope||'No scope provided.',left,width,10.5,'normal',text,16);
+  y+=12;
+
+  if(v.exclusions){
+    drawSectionTitle('3. Exclusions');
+    writeWrapped(v.exclusions,left,width,10.5,'normal',text,16);
+    y+=12;
   }
+
+  const paymentSectionNumber=v.exclusions?'4':'3';
+  drawSectionTitle(paymentSectionNumber+'. Payment Schedule');
+  if((v.milestones||[]).length){
+    const tableX=left;
+    const tableW=width;
+    const cols=[tableX,tableX+235,tableX+345,tableX+442];
+    ensureSpace(26);
+    doc.setFillColor(navy[0],navy[1],navy[2]);
+    doc.rect(tableX,y-12,tableW,22,'F');
+    setFont(9,'bold',[255,255,255]);
+    doc.text('PAYMENT MILESTONE',cols[0]+8,y+2);
+    doc.text('AMOUNT',cols[1]+8,y+2);
+    doc.text('% OF CONTRACT',cols[2]+8,y+2);
+    doc.text('DUE DATE',cols[3]+8,y+2);
+    y+=22;
+    (v.milestones||[]).forEach(function(ms,index){
+      ensureSpace(22);
+      if(index%2===1){
+        doc.setFillColor(247,246,242);
+        doc.rect(tableX,y-12,tableW,22,'F');
+      }
+      setFont(9.5,'normal',text);
+      doc.text(String(ms.name||'Milestone'),cols[0]+8,y+2);
+      doc.text(fmtMoney(ms.amount||0),cols[1]+8,y+2);
+      doc.text(v.amount?Math.round(Number(ms.amount||0)/Number(v.amount)*100)+'%':'-',cols[2]+8,y+2);
+      doc.text(ms.dueDate?fmtDate(ms.dueDate):'-',cols[3]+8,y+2);
+      y+=22;
+    });
+  }else{
+    writeWrapped('No payment milestones specified.',left,width,10.5,'italic',muted,16);
+    y+=8;
+  }
+
+  if(v.notes){
+    drawSectionTitle('Special Conditions');
+    writeWrapped(v.notes,left,width,10.5,'normal',text,16);
+    y+=12;
+  }
+
+  drawSectionTitle('General Terms');
+  writeWrapped(
+    '1. All work shall comply with applicable codes including CBC 2022, CPC 2022, CEC 2022, CALGreen 2022, and Title 24.\n'
+    +'2. Subcontractor shall carry all required insurance including general liability and workers compensation.\n'
+    +'3. Changes to scope require written change order approval before proceeding.\n'
+    +'4. Payment is subject to receipt of lien waivers for milestone payments.\n'
+    +'5. California law governs this agreement.',
+    left,
+    width,
+    10,
+    'normal',
+    muted,
+    15
+  );
+  y+=16;
+
+  ensureSpace(82);
+  const sigY=y+24;
+  doc.setDrawColor(120,120,120);
+  doc.setLineWidth(0.8);
+  doc.line(left,sigY,left+220,sigY);
+  doc.line(pageW-right-220,sigY,pageW-right,sigY);
+  setFont(9,'normal',muted);
+  doc.text('Owner / General Contractor',left,sigY+14);
+  doc.text('Subcontractor Signature',pageW-right-220,sigY+14);
+  setFont(11,'bold',text);
+  doc.text(LIVIO_COMPANY_NAME,left,sigY+32);
+  doc.text(v.vendor||'Subcontractor',pageW-right-220,sigY+32);
+
+  const dataUri=doc.output('datauristring');
+  const content=String(dataUri).split(',')[1]||'';
+  const safeVendor=String(v.vendor||'vendor-contract').replace(/[^a-z0-9-_]+/gi,'_');
+  const safeProject=String(p.name||'project').replace(/[^a-z0-9-_]+/gi,'_');
+  return {
+    filename:`${safeVendor}-${safeProject}-contract.pdf`,
+    content,
+    contentType:'application/pdf'
+  };
+}
+
+async function getVendorContractEmailAttachments(vid){
   return [buildVendorContractPdfAttachment(vid)];
 }
 
