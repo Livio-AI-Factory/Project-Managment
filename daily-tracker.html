@@ -817,6 +817,23 @@ const save = () => { saveTrackerState(); };
 const getDay = id => days.find(d=>d.id===id);
 const getDisc = id => discItems.find(d=>d.id===id);
 const esc = s => (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const slugifyChecklistKey = value => String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || ('section-'+Date.now());
+const checklistStyles = ['f','r','fw'];
+const checklistIcons = ['🗂️','📋','🛠️','✅','🧱','🔎'];
+function getNextChecklistStyle(index=0){
+  return checklistStyles[index % checklistStyles.length];
+}
+function getNextChecklistIcon(index=0){
+  return checklistIcons[index % checklistIcons.length];
+}
+function createChecklistSection(label){
+  const count = Object.keys(checklistTemplate||{}).length;
+  return {label, icon:getNextChecklistIcon(count), cls:getNextChecklistStyle(count), items:[]};
+}
+function ensureChecklistTemplate(){
+  if(!checklistTemplate || typeof checklistTemplate!=='object' || Array.isArray(checklistTemplate)) checklistTemplate={};
+  return checklistTemplate;
+}
 
 // ── SIDEBAR VIEW SWITCHING ──
 function switchSideView(view, btn) {
@@ -929,6 +946,8 @@ function renderMain(){
   </div>
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab(event,'tCL')">Checklist</button>
+    <button class="tab-btn" onclick="addChecklistSection()">+ Add Section</button>
+    <button class="tab-btn" onclick="addChecklistItem()">+ Add Item</button>
     <button class="tab-btn" onclick="switchTab(event,'tMD')">Media</button>
     <button class="tab-btn" onclick="switchTab(event,'tHI')">History</button>
     <button class="tab-btn" style="color:var(--amber)" onclick="deleteChecklist()">Delete Checklist</button>
@@ -1065,6 +1084,10 @@ function buildCL(day){
       <div style="padding:28px 24px;text-align:center">
         <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px">No checklist for this project</div>
         <div style="font-size:13px;color:var(--text2);line-height:1.7;max-width:520px;margin:0 auto">This Daily Tracker checklist is now project-specific, and the old prewritten checklist has been removed from Days.</div>
+        <div style="margin-top:14px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="addChecklistSection()">+ Add Section</button>
+          <button class="btn btn-orange btn-sm" onclick="addChecklistItem()">+ Add First Item</button>
+        </div>
       </div>
     </div>`;
   }
@@ -1249,6 +1272,54 @@ function deleteChecklist(){
   });
   save();
   renderSidebar();
+  renderMain();
+}
+
+function addChecklistSection(){
+  ensureChecklistTemplate();
+  const label=(prompt('Section name for this project checklist:', '')||'').trim();
+  if(!label)return;
+  const keyBase=slugifyChecklistKey(label);
+  let key=keyBase, idx=2;
+  while(checklistTemplate[key]){ key=`${keyBase}-${idx++}`; }
+  checklistTemplate[key]=createChecklistSection(label);
+  save();
+  renderMain();
+}
+
+function addChecklistItem(){
+  ensureChecklistTemplate();
+  let groups=getChecklistGroups();
+  if(!groups.length){
+    const createFirst=confirm('This project has no checklist sections yet. Create one now?');
+    if(!createFirst)return;
+    addChecklistSection();
+    groups=getChecklistGroups();
+    if(!groups.length)return;
+  }
+  const sectionPrompt='Add item to which section?\n' + groups.map(([key,section],i)=>`${i+1}. ${section.label}`).join('\n');
+  const sectionInput=(prompt(sectionPrompt,'1')||'').trim();
+  if(!sectionInput)return;
+  let targetKey=null;
+  const numericIndex=Number(sectionInput);
+  if(Number.isFinite(numericIndex) && numericIndex>=1 && numericIndex<=groups.length){
+    targetKey=groups[numericIndex-1][0];
+  }else{
+    const lowered=sectionInput.toLowerCase();
+    targetKey=groups.find(([key,section])=>key.toLowerCase()===lowered || String(section.label||'').toLowerCase()===lowered)?.[0] || null;
+  }
+  if(!targetKey){
+    alert('Section not found.');
+    return;
+  }
+  const text=(prompt('Checklist item text:', '')||'').trim();
+  if(!text)return;
+  const ptsRaw=(prompt('Points for this item:', '5')||'').trim();
+  const pts=Math.max(parseInt(ptsRaw,10)||0,0);
+  const section=checklistTemplate[targetKey];
+  if(!section.items)section.items=[];
+  section.items.push({id:`cli_${Date.now()}_${section.items.length+1}`,text,pts});
+  save();
   renderMain();
 }
 
