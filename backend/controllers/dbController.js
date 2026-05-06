@@ -124,7 +124,18 @@ async function getProject(id) {
 }
 
 async function saveAll(data) {
-  await writeDB(data);
+  const current = await readDB();
+  const normalized = normalizeDB(data);
+  const currentHasProjects = Array.isArray(current.projects) && current.projects.length > 0;
+  const incomingHasProjects = Array.isArray(data?.projects) && normalized.projects.length > 0;
+
+  if (currentHasProjects && !incomingHasProjects) {
+    const err = new Error('Refusing to overwrite existing projects with an empty sync payload');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  await writeDB(normalized);
   return true;
 }
 
