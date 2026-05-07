@@ -16,16 +16,28 @@ const EMPTY_DB = {
   users: [],
   roles: [],
   perms: {},
-  passwordResets: {}
+  passwordResets: {},
+  deletedProjectIds: []
 };
 
 function cloneEmptyDB() {
   return JSON.parse(JSON.stringify(EMPTY_DB));
 }
 
+function normalizeDeletedProjectIds(value) {
+  const ids = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object'
+      ? Object.keys(value)
+      : [];
+
+  return [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+}
+
 function normalizeDB(data) {
   const raw = data && typeof data === 'object' ? data : {};
   const activeId = raw.activeId ?? raw.activeProjectId ?? null;
+  const deletedProjectIds = normalizeDeletedProjectIds(raw.deletedProjectIds || raw.deletedProjects);
 
   return {
     ...cloneEmptyDB(),
@@ -38,9 +50,90 @@ function normalizeDB(data) {
     passwordResets: raw.passwordResets && typeof raw.passwordResets === 'object' && !Array.isArray(raw.passwordResets)
       ? raw.passwordResets
       : {},
+    deletedProjectIds,
     activeId,
     activeProjectId: activeId
   };
+}
+
+function isPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function arrayItemsHaveIds(items) {
+  return items.every((item) => isPlainObject(item) && item.id);
+}
+
+function mergePreservingArrayItems(currentValue, incomingValue) {
+  if (incomingValue === undefined) return currentValue;
+
+  if (Array.isArray(currentValue) && Array.isArray(incomingValue)) {
+    if (!arrayItemsHaveIds(currentValue) || !arrayItemsHaveIds(incomingValue)) {
+      return incomingValue.length >= currentValue.length ? incomingValue : currentValue;
+    }
+
+    const mergedById = new Map();
+    const order = [];
+
+    for (const item of currentValue) {
+      const id = String(item.id);
+      mergedById.set(id, item);
+      order.push(id);
+    }
+
+    for (const item of incomingValue) {
+      const id = String(item.id);
+      const existing = mergedById.get(id);
+      mergedById.set(id, existing ? mergePreservingArrayItems(existing, item) : item);
+      if (!order.includes(id)) order.push(id);
+    }
+
+    return order.map((id) => mergedById.get(id));
+  }
+
+  if (isPlainObject(currentValue) && isPlainObject(incomingValue)) {
+    const result = { ...currentValue };
+    for (const key of Object.keys(incomingValue)) {
+      result[key] = mergePreservingArrayItems(currentValue[key], incomingValue[key]);
+    }
+    return result;
+  }
+
+  return incomingValue;
+}
+
+function mergeProjectState(currentData, incomingData) {
+  const current = normalizeDB(currentData);
+  const incoming = normalizeDB(incomingData);
+  const deletedProjectIds = normalizeDeletedProjectIds(current.deletedProjectIds);
+  const deleted = new Set(deletedProjectIds);
+  const byId = new Map();
+
+  for (const project of current.projects || []) {
+    if (project?.id && !deleted.has(project.id)) byId.set(project.id, project);
+  }
+
+  for (const project of incoming.projects || []) {
+    if (project?.id && !deleted.has(project.id)) {
+      const existing = byId.get(project.id);
+      byId.set(project.id, existing ? mergePreservingArrayItems(existing, project) : project);
+    }
+  }
+
+  const projects = [...byId.values()];
+  const requestedActiveId = incoming.activeId ?? incoming.activeProjectId ?? current.activeId ?? current.activeProjectId ?? null;
+  const activeId = projects.some((project) => project.id === requestedActiveId)
+    ? requestedActiveId
+    : projects[0]?.id || null;
+
+  return normalizeDB({
+    ...current,
+    ...incoming,
+    projects,
+    deletedProjectIds,
+    activeId,
+    activeProjectId: activeId
+  });
 }
 
 // ── Local-disk driver (dev fallback when DATABASE_URL is not set) ────────────
@@ -124,7 +217,18 @@ async function getProject(id) {
 }
 
 async function saveAll(data) {
-  await writeDB(data);
+  const current = await readDB();
+  const normalized = normalizeDB(data);
+  const currentHasProjects = Array.isArray(current.projects) && current.projects.length > 0;
+  const incomingHasProjects = Array.isArray(data?.projects) && normalized.projects.length > 0;
+
+  if (currentHasProjects && !incomingHasProjects) {
+    const err = new Error('Refusing to overwrite existing projects with an empty sync payload');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  await writeDB(mergeProjectState(current, normalized));
   return true;
 }
 
@@ -133,6 +237,7 @@ async function saveProject(project) {
   const nextProject = project && typeof project === 'object' ? project : {};
 
   if (!db.projects) db.projects = [];
+  db.deletedProjectIds = normalizeDeletedProjectIds(db.deletedProjectIds).filter((id) => id !== nextProject.id);
   const idx = db.projects.findIndex((item) => item.id === nextProject.id);
 
   if (idx > -1) {
@@ -147,6 +252,7 @@ async function saveProject(project) {
 
 async function deleteProject(id) {
   const db = await readDB();
+  db.deletedProjectIds = normalizeDeletedProjectIds([...(db.deletedProjectIds || []), id]);
   db.projects = (db.projects || []).filter((project) => project.id !== id);
   if (db.activeId === id || db.activeProjectId === id) {
     const fallbackId = db.projects[0]?.id || null;

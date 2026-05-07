@@ -27,7 +27,7 @@ router.post('/sync', async (req, res) => {
     await db.saveAll(data);
     res.json({ ok: true, message: 'Database synced successfully' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statusCode || 500).json({ error: e.message });
   }
 });
 

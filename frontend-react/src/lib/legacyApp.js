@@ -3,7 +3,53 @@
 //  CONSTANTS & HELPERS
 // ══════════════════════════════════════════════════════════════════
 const SK = 'livio_v1';
+const LOCAL_BACKUP_SK = 'livio_v1_browser_backup';
 const COLORS = ['#1A6BC4','#2D6A0F','#A86200','#9B1F1F','#0D6E58','#4A3FB0','#555451','#7A3535'];
+
+function isLocalBrowserHost(hostname){
+  const host=String(hostname||'').trim().toLowerCase();
+  return host==='127.0.0.1'||host==='localhost';
+}
+function isLocalBrowserRuntime(){
+  if(typeof window==='undefined'||!window.location) return false;
+  return isLocalBrowserHost(window.location.hostname);
+}
+function shouldPersistBrowserDB(){
+  return isLocalBrowserRuntime();
+}
+function requiresRemoteHydration(){
+  return !shouldPersistBrowserDB();
+}
+function createEmptyDB(){
+  return {
+    projects:[],
+    activeId:null,
+    activeProjectId:null,
+    vendorDirectory:[],
+    users:[],
+    roles:[],
+    perms:{},
+    passwordResets:{},
+    deletedProjectIds:[]
+  };
+}
+function createSeedDB(){
+  return {
+    ...createEmptyDB(),
+    projects:[JSON.parse(JSON.stringify(SEED))],
+    activeId:'proj_madera',
+    activeProjectId:'proj_madera'
+  };
+}
+function preservePersistedLocalDBBackup(){
+  if(typeof localStorage==='undefined') return;
+  try{
+    const raw=localStorage.getItem(SK);
+    if(raw && !localStorage.getItem(LOCAL_BACKUP_SK)){
+      localStorage.setItem(LOCAL_BACKUP_SK,raw);
+    }
+  }catch(e){}
+}
 
 const CITY_DB = {
   // ── Santa Clara County ──
@@ -398,7 +444,7 @@ const SEED = {
 
 function loadDB(){
   try{
-    if(typeof localStorage!=='undefined'){
+    if(shouldPersistBrowserDB()&&typeof localStorage!=='undefined'){
       const raw=localStorage.getItem(SK);
       if(raw){
         const parsed=JSON.parse(raw);
@@ -408,7 +454,7 @@ function loadDB(){
   }catch(e){
     console.warn('Local DB load failed:',e?.message||e);
   }
-  return {projects:[JSON.parse(JSON.stringify(SEED))],activeId:'proj_madera',activeProjectId:'proj_madera',vendorDirectory:[]};
+  return shouldPersistBrowserDB() ? createSeedDB() : createEmptyDB();
 }
 function saveDB(){
   try{
@@ -494,7 +540,7 @@ const setProj = id => {
   syncEmbeddedProjectFrames(true);
 };
 
-function regFiles(arr){ (arr||[]).forEach(f=>{ if(f&&f.id&&(f.data||f.path)) FA[f.id]=f; }); }
+function regFiles(arr){ (arr||[]).forEach(f=>{ if(f&&f.id&&hasFileLocator(f)) FA[f.id]=f; }); }
 
 // ══════════════════════════════════════════════════════════════════
 //  NAVIGATION
@@ -593,6 +639,38 @@ function updateSidebar(){
 // ── PROJECTS ──
 function renderProjects(){
   const grid=vEl('proj-grid');
+  if(!grid) return;
+  if(!(DB.projects||[]).length){
+    if(remoteHydrationPending){
+      grid.innerHTML=`
+        <div class="panel" style="grid-column:1/-1;padding:28px;text-align:center">
+          <div style="font-size:26px;margin-bottom:8px">☁</div>
+          <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px">Loading Railway Data</div>
+          <div style="font-size:12px;color:var(--muted)">Your projects are still loading from Railway. This screen is not treated as empty data.</div>
+        </div>`;
+      return;
+    }
+    if(remoteHydrationError){
+      grid.innerHTML=`
+        <div class="panel" style="grid-column:1/-1;padding:28px;text-align:center">
+          <div style="font-size:26px;margin-bottom:8px">⚠</div>
+          <div style="font-size:16px;font-weight:700;color:var(--red);margin-bottom:6px">Could Not Load Railway Data</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${remoteHydrationError}</div>
+          <button class="btn btn-navy" onclick="retryRemoteHydration()">Retry Railway Sync</button>
+        </div>`;
+      return;
+    }
+    if(requiresRemoteHydration()){
+      grid.innerHTML=`
+        <div class="panel" style="grid-column:1/-1;padding:28px;text-align:center">
+          <div style="font-size:26px;margin-bottom:8px">📁</div>
+          <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px">No Projects In Railway Yet</div>
+          <div style="font-size:12px;color:var(--muted)">Railway responded successfully, but there are no saved projects in the shared database yet.</div>
+        </div>
+        <div class="add-card" onclick="openModal('project')"><div style="font-size:28px;opacity:.35;margin-bottom:8px">➕</div><div style="font-size:13px;color:var(--muted);font-weight:500">Add New Project</div></div>`;
+      return;
+    }
+  }
   let html=DB.projects.map(p=>{
     const active=(p.works||[]).filter(w=>['active','inprogress','starting'].includes(w.status)).length;
     const msDone=(p.milestones||[]).filter(m=>m.status==='done').length;
@@ -1485,7 +1563,7 @@ function renderExport(){
   (p.plans||[]).forEach(pl=>allFiles.push({...pl,src:'Plans & Docs'}));
   (p.inspections||[]).forEach(i=>(i.files||[]).forEach(f=>allFiles.push({...f,src:'Inspection: '+i.name})));
   (p.milestones||[]).forEach(m=>(m.payFiles||[]).forEach(f=>allFiles.push({...f,src:'Milestone: '+m.name})));
-  allFiles.forEach(f=>{if(f.data)FA[f.id]=f;});
+  allFiles.forEach(f=>{if(hasFileLocator(f))FA[f.id]=f;});
   const fl=vEl('exp-files');
   if(!allFiles.length){fl.innerHTML=`<div class="empty"><div class="empty-ic">📂</div>No files attached to this project yet.</div>`;return;}
   fl.innerHTML=`<div class="attach-list">${allFiles.map(f=>`<div class="a-item"><span class="a-icon">${fileIcon(f.name)}</span><div style="flex:1;min-width:0"><div class="a-name">${f.name}</div><div style="font-size:10px;color:var(--muted)">${f.src} · ${fmtBytes(f.size||0)}</div></div><button class="a-dl" onclick="dlFile('${f.id}')">⬇ Download</button></div>`).join('')}</div>`;
@@ -2547,9 +2625,11 @@ function delPlan(id){
 }
 function delProj(id){
   if(!confirm('Delete this project and ALL its data?')) return;
+  DB.deletedProjectIds=normalizeDeletedProjectIds([...(DB.deletedProjectIds||[]),id]);
   DB.projects=DB.projects.filter(p=>p.id!==id);
   if(DB.activeId===id) DB.activeId=DB.projects[0]?.id||null;
   saveDB(); renderAll(); toast('🗑 Project deleted');
+  deleteRemoteProject(id);
   if(!DB.activeId) nav('projects');
 }
 
@@ -3316,10 +3396,11 @@ function renderInvoices(){
       const bg=idx%2===0?'#fff':'var(--bg)';
       const filesCell=`<div style="display:flex;flex-direction:column;gap:4px">
         ${(inv.files||[]).length
-          ?(inv.files||[]).map(f=>`<div style="display:flex;align-items:center;gap:5px;background:var(--amber-l);border:1px solid #F5D9A0;border-radius:5px;padding:3px 8px">
+          ?(inv.files||[]).map(f=>`<div style="display:flex;align-items:center;gap:5px;background:var(--amber-l);border:1px solid #F5D9A0;border-radius:5px;padding:3px 8px;cursor:pointer" onclick="viewFile('${f.id}')" title="Open ${f.name}">
               <span style="font-size:12px">${fileIcon(f.name)}</span>
               <span style="font-size:10px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px" title="${f.name}">${f.name}</span>
-              <button class="a-dl" style="background:var(--amber-l);color:var(--amber);border:1px solid #F5D9A0" onclick="dlFile('${f.id}')" title="Download">⬇</button>
+              <button class="a-dl" style="background:#fff7e8;color:var(--amber);border:1px solid #F5D9A0;font-size:9px;padding:1px 6px;flex-shrink:0" onclick="event.stopPropagation();viewFile('${f.id}')" title="Open">Open</button>
+              <button class="a-dl" style="background:var(--amber-l);color:var(--amber);border:1px solid #F5D9A0;flex-shrink:0" onclick="event.stopPropagation();dlFile('${f.id}')" title="Download">⬇</button>
             </div>`).join('')
           :'<span style="font-size:10px;color:var(--muted);font-style:italic">No files yet</span>'
         }
@@ -4047,6 +4128,7 @@ function getEmailConfig(){
   try{localStorage.removeItem('livio_email_config');}catch{}
   return {};
 }
+const PRODUCTION_API_BASE='https://pms.golivio.com/api';
 function detectDefaultApiBase(){
   const envBase=(typeof import.meta!=='undefined'&&import.meta.env&&import.meta.env.VITE_API_BASE)
     ? String(import.meta.env.VITE_API_BASE).trim()
@@ -4054,12 +4136,14 @@ function detectDefaultApiBase(){
   if(envBase) return envBase;
   if(typeof window!=='undefined'&&window.location){
     const {hostname, origin, port}=window.location;
-    const isLocalHost=hostname==='127.0.0.1'||hostname==='localhost';
+    const isLocalHost=isLocalBrowserHost(hostname);
     const isFrontendDevPort=['3000','4173','5173','5500'].includes(String(port||''));
     if(isLocalHost&&isFrontendDevPort) return 'http://127.0.0.1:3001/api';
-    return 'https://project-managment-production-7373.up.railway.app/api';
+    if(isLocalHost) return origin.replace(/\/+$/,'')+'/api';
+    if(hostname.endsWith('railway.app')) return origin.replace(/\/+$/,'')+'/api';
+    return PRODUCTION_API_BASE;
   }
-  return 'http://127.0.0.1:3001/api';
+  return PRODUCTION_API_BASE;
 }
 const DEFAULT_API_BASE=detectDefaultApiBase();
 function shouldIgnoreLocalApiBase(raw){
@@ -4067,7 +4151,7 @@ function shouldIgnoreLocalApiBase(raw){
   const value=String(raw).trim().toLowerCase();
   const isSavedLocal=value.startsWith('http://127.0.0.1:3001')||value.startsWith('http://localhost:3001');
   const { hostname }=window.location;
-  const runningLocal=hostname==='127.0.0.1'||hostname==='localhost';
+  const runningLocal=isLocalBrowserHost(hostname);
   return isSavedLocal && !runningLocal;
 }
 function getApiBase(){
@@ -4076,26 +4160,90 @@ function getApiBase(){
 function getBackendBase(){
   return getApiBase().replace(/\/api$/,'');
 }
+function hasFileLocator(file){
+  return !!(file&&(file.data||file.path||file.url));
+}
+function getCurrentOrigin(){
+  if(typeof window==='undefined'||!window.location||!window.location.origin) return '';
+  return window.location.origin.replace(/\/+$/,'');
+}
+function absolutizePath(pathValue, base){
+  const cleanPath=String(pathValue||'').trim();
+  const cleanBase=String(base||'').trim().replace(/\/+$/,'');
+  if(!cleanPath) return '';
+  if(/^https?:\/\//i.test(cleanPath)||cleanPath.startsWith('data:')||cleanPath.startsWith('blob:')) return cleanPath;
+  if(!cleanBase) return cleanPath;
+  return cleanPath.startsWith('/') ? cleanBase+cleanPath : cleanBase+'/'+cleanPath.replace(/^\/+/,'');
+}
+function buildAlternateFilePath(pathValue){
+  const cleanPath=String(pathValue||'').trim();
+  if(!cleanPath) return '';
+  if(cleanPath.startsWith('/uploads/')) return cleanPath.replace('/uploads/','/api/files/');
+  if(cleanPath.startsWith('/api/files/')) return cleanPath.replace('/api/files/','/uploads/');
+  return '';
+}
+function getKnownBackendBases(){
+  const seen=new Set();
+  const bases=[];
+  const addBase=(value)=>{
+    const base=String(value||'').trim().replace(/\/+$/,'');
+    if(!base||seen.has(base)) return;
+    seen.add(base);
+    bases.push(base);
+  };
+  addBase(getCurrentOrigin());
+  addBase(getBackendBase());
+  addBase(PRODUCTION_API_BASE.replace(/\/api$/,''));
+  addBase('http://127.0.0.1:3001');
+  addBase('http://localhost:3001');
+  return bases;
+}
+function getFileUrlCandidates(file){
+  if(!file) return [];
+  if(file.data) return [file.data];
+  const candidates=[];
+  const seen=new Set();
+  const backendBases=getKnownBackendBases();
+  const addCandidate=(value)=>{
+    const candidate=String(value||'').trim();
+    if(!candidate||seen.has(candidate)) return;
+    seen.add(candidate);
+    candidates.push(candidate);
+  };
+  const rawPath=String(file.path||file.url||'').trim();
+  if(rawPath){
+    backendBases.forEach(base=>addCandidate(absolutizePath(rawPath,base)));
+    const alternatePath=buildAlternateFilePath(rawPath);
+    if(alternatePath){
+      backendBases.forEach(base=>addCandidate(absolutizePath(alternatePath,base)));
+    }
+  }
+  return candidates;
+}
 function getUploadProjectId(){
   return proj()?.id||DB?.activeId||DB?.activeProjectId||'general';
 }
 function getFileUrl(file){
-  if(!file) return '';
-  if(file.path){
-    const normalizedPath=file.path.startsWith('/uploads/')
-      ? file.path.replace('/uploads/','/api/files/')
-      : file.path;
-    return getBackendBase()+normalizedPath;
-  }
-  return file.data||'';
+  return getFileUrlCandidates(file)[0]||'';
 }
 async function fetchFileBlob(file){
   if(!file) throw new Error('File not found');
-  const url=getFileUrl(file);
-  if(!url) throw new Error('File not found');
-  const res=await fetch(url);
-  if(!res.ok) throw new Error('File download failed');
-  return await res.blob();
+  const candidates=getFileUrlCandidates(file);
+  if(!candidates.length) throw new Error('File not found');
+  let lastError=null;
+  for(const url of candidates){
+    try{
+      const res=await fetch(url);
+      if(!res.ok){
+        lastError=new Error('File download failed ('+res.status+')');
+        continue;
+      }
+      return await res.blob();
+    }catch(err){
+      lastError=err;
+    }
+  }
+  throw lastError||new Error('File download failed');
 }
 async function uploadFilesToServer(fileList, projectId){
   const files=Array.from(fileList||[]);
@@ -4121,6 +4269,8 @@ let hydrateStarted=false;
 let hasLocalChanges=false;
 let saveRevision=0;
 let syncRequestedWhileInFlight=false;
+let remoteHydrationPending=requiresRemoteHydration();
+let remoteHydrationError='';
 function normalizeSharedUser(user, index=0){
   const raw=(user&&typeof user==='object')?user:{};
   return {
@@ -4132,13 +4282,19 @@ function normalizeSharedUser(user, index=0){
     email: String(raw.email||'').trim()
   };
 }
+function normalizeDeletedProjectIds(input){
+  const ids=Array.isArray(input)
+    ? input
+    : (input&&typeof input==='object'&&!Array.isArray(input) ? Object.keys(input) : []);
+  return [...new Set(ids.map(id=>String(id||'').trim()).filter(Boolean))];
+}
 function normalizeDBShape(input){
   const raw=(input&&typeof input==='object')?input:{};
   const hasProjectsField=Array.isArray(raw.projects);
   const fallbackProjects=hasProjectsField
     ? raw.projects
-    : [JSON.parse(JSON.stringify(SEED))];
-  const activeId=raw.activeId??raw.activeProjectId??fallbackProjects?.[0]?.id??'proj_madera';
+    : (shouldPersistBrowserDB() ? [JSON.parse(JSON.stringify(SEED))] : []);
+  const activeId=raw.activeId??raw.activeProjectId??fallbackProjects?.[0]?.id??null;
   const db={
     ...raw,
     projects:fallbackProjects,
@@ -4147,6 +4303,7 @@ function normalizeDBShape(input){
     roles:Array.isArray(raw.roles)?raw.roles.map(role=>String(role||'').trim()).filter(Boolean):[],
     perms:(raw.perms&&typeof raw.perms==='object'&&!Array.isArray(raw.perms))?raw.perms:{},
     passwordResets:(raw.passwordResets&&typeof raw.passwordResets==='object'&&!Array.isArray(raw.passwordResets))?raw.passwordResets:{},
+    deletedProjectIds:normalizeDeletedProjectIds(raw.deletedProjectIds||raw.deletedProjects),
     activeId,
     activeProjectId:activeId
   };
@@ -4211,7 +4368,7 @@ function setDB(nextDB){
   if(typeof window!=='undefined') window.DB=DB;
 }
 function persistDBLocal(){
-  if(typeof localStorage==='undefined') return;
+  if(!shouldPersistBrowserDB()||typeof localStorage==='undefined') return;
   const activeId=DB?.activeId??DB?.activeProjectId??null;
   localStorage.setItem(SK,JSON.stringify({
     ...DB,
@@ -4228,10 +4385,14 @@ async function syncRemoteDB(){
   syncRequestedWhileInFlight=false;
   const revisionAtStart=saveRevision;
   try{
+    const syncPayload={
+      ...DB,
+      deletedProjectIds:[]
+    };
     const res=await fetch(getApiBase()+'/projects/sync',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(DB)
+      body:JSON.stringify(syncPayload)
     });
     if(!res.ok){
       let msg='Failed to sync data';
@@ -4253,13 +4414,35 @@ function queueRemoteSync(delay=150){
   clearTimeout(syncTimer);
   syncTimer=setTimeout(()=>{syncRemoteDB();},delay);
 }
+async function deleteRemoteProject(id){
+  if(!id||shouldPersistBrowserDB()) return;
+  try{
+    const res=await fetch(getApiBase()+'/projects/'+encodeURIComponent(id),{
+      method:'DELETE'
+    });
+    if(!res.ok){
+      let msg='Failed to delete project on server';
+      try{
+        const data=await res.json();
+        msg=data?.error||msg;
+      }catch(e){}
+      throw new Error(msg);
+    }
+  }catch(e){
+    console.warn('Remote project delete failed:',e?.message||e);
+    toast('⚠ Project removed locally, but server delete failed. Refresh before continuing.',5000);
+  }
+}
 async function hydrateDBFromServer(){
   if(hydrateStarted) return;
   hydrateStarted=true;
+  remoteHydrationPending=requiresRemoteHydration();
+  remoteHydrationError='';
   try{
     const res=await fetch(getApiBase()+'/projects/all');
     if(!res.ok) throw new Error('Failed to load shared data');
     const remote=normalizeDBShape(await res.json());
+    remoteHydrationPending=false;
     if(hasLocalChanges){
       queueRemoteSync(50);
       return;
@@ -4267,18 +4450,40 @@ async function hydrateDBFromServer(){
     if((remote.projects||[]).length){
       setDB(remote);
       try{persistDBLocal();}catch(e){}
+      if(!shouldPersistBrowserDB()) preservePersistedLocalDBBackup();
       registerAllFiles();
       if(typeof renderAll==='function') renderAll();
     }else if((DB.projects||[]).length){
       queueRemoteSync(50);
+    }else if(typeof renderAll==='function'){
+      renderAll();
     }
   }catch(e){
+    remoteHydrationPending=false;
+    remoteHydrationError=String(e?.message||e||'Failed to reach Railway');
     console.warn('Shared data load skipped:',e?.message||e);
+    if(typeof renderAll==='function') renderAll();
   }
 }
+function retryRemoteHydration(){
+  hydrateStarted=false;
+  remoteHydrationPending=requiresRemoteHydration();
+  remoteHydrationError='';
+  hydrateDBFromServer();
+  if(typeof renderAll==='function') renderAll();
+}
 setDB(DB);
+if(!shouldPersistBrowserDB()) preservePersistedLocalDBBackup();
 registerAllFiles();
 saveDB=function(){
+  if(requiresRemoteHydration()&&remoteHydrationPending){
+    toast('⚠ Waiting for Railway data to finish loading');
+    return;
+  }
+  if(requiresRemoteHydration()&&remoteHydrationError&&!(DB.projects||[]).length){
+    toast('⚠ Railway data is unavailable. Retry sync before making changes.');
+    return;
+  }
   try{
     DB.activeProjectId=DB.activeId??DB.activeProjectId??null;
     persistDBLocal();
@@ -4330,7 +4535,7 @@ getFileRecord = function(fid){
     registerAllFiles();
     f=FA[fid];
   }
-  return (f&&(f.data||f.path))?f:null;
+  return hasFileLocator(f)?f:null;
 };
 dlFile = async function(fid){
   const f=getFileRecord(fid);
@@ -4375,22 +4580,22 @@ exportAllFiles = function(){
   const p=proj(); if(!p){toast('âš  No project selected');return;}
   const all=[];
   (p.quotes||[]).forEach(q=>{
-    (q.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+    (q.files||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
     (q.payMilestones||[]).forEach(pm=>{
-      (pm.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
-      (pm.lienFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
-      (pm.invoiceFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
+      (pm.files||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
+      (pm.lienFiles||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
+      (pm.invoiceFiles||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
     });
   });
-  (p.plans||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
-  (p.inspections||[]).forEach(i=>(i.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
-  (p.vendors||[]).forEach(v=>(v.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
+  (p.plans||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
+  (p.inspections||[]).forEach(i=>(i.files||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);}));
+  (p.vendors||[]).forEach(v=>(v.files||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);}));
   (p.invoices||[]).forEach(inv=>{
-    (inv.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
-    (inv.proofFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
-    (inv.lienFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);});
-    (inv.partialPayments||[]).forEach(pp=>(pp.files||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
-    (inv.payments||[]).forEach(pay=>(pay.proofFiles||[]).forEach(f=>{if(f.data||f.path)all.push(f);}));
+    (inv.files||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
+    (inv.proofFiles||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
+    (inv.lienFiles||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);});
+    (inv.partialPayments||[]).forEach(pp=>(pp.files||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);}));
+    (inv.payments||[]).forEach(pay=>(pay.proofFiles||[]).forEach(f=>{if(hasFileLocator(f))all.push(f);}));
   });
   if(!all.length){toast('âš  No files in this project');return;}
   all.forEach((f,i)=>setTimeout(()=>dlFile(f.id),i*350));
@@ -8435,6 +8640,7 @@ export function initLegacyApp() {
 
   // Print
   window.print = window.print;
+  window.retryRemoteHydration = retryRemoteHydration;
 
   hydrateDBFromServer();
 }
