@@ -29,7 +29,8 @@ function createEmptyDB(){
     users:[],
     roles:[],
     perms:{},
-    passwordResets:{}
+    passwordResets:{},
+    deletedProjectIds:[]
   };
 }
 function createSeedDB(){
@@ -2624,6 +2625,7 @@ function delPlan(id){
 }
 function delProj(id){
   if(!confirm('Delete this project and ALL its data?')) return;
+  DB.deletedProjectIds=normalizeDeletedProjectIds([...(DB.deletedProjectIds||[]),id]);
   DB.projects=DB.projects.filter(p=>p.id!==id);
   if(DB.activeId===id) DB.activeId=DB.projects[0]?.id||null;
   saveDB(); renderAll(); toast('🗑 Project deleted');
@@ -4279,6 +4281,12 @@ function normalizeSharedUser(user, index=0){
     email: String(raw.email||'').trim()
   };
 }
+function normalizeDeletedProjectIds(input){
+  const ids=Array.isArray(input)
+    ? input
+    : (input&&typeof input==='object'&&!Array.isArray(input) ? Object.keys(input) : []);
+  return [...new Set(ids.map(id=>String(id||'').trim()).filter(Boolean))];
+}
 function normalizeDBShape(input){
   const raw=(input&&typeof input==='object')?input:{};
   const hasProjectsField=Array.isArray(raw.projects);
@@ -4294,6 +4302,7 @@ function normalizeDBShape(input){
     roles:Array.isArray(raw.roles)?raw.roles.map(role=>String(role||'').trim()).filter(Boolean):[],
     perms:(raw.perms&&typeof raw.perms==='object'&&!Array.isArray(raw.perms))?raw.perms:{},
     passwordResets:(raw.passwordResets&&typeof raw.passwordResets==='object'&&!Array.isArray(raw.passwordResets))?raw.passwordResets:{},
+    deletedProjectIds:normalizeDeletedProjectIds(raw.deletedProjectIds||raw.deletedProjects),
     activeId,
     activeProjectId:activeId
   };
