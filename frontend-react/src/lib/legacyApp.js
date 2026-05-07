@@ -2629,6 +2629,7 @@ function delProj(id){
   DB.projects=DB.projects.filter(p=>p.id!==id);
   if(DB.activeId===id) DB.activeId=DB.projects[0]?.id||null;
   saveDB(); renderAll(); toast('🗑 Project deleted');
+  deleteRemoteProject(id);
   if(!DB.activeId) nav('projects');
 }
 
@@ -4384,10 +4385,14 @@ async function syncRemoteDB(){
   syncRequestedWhileInFlight=false;
   const revisionAtStart=saveRevision;
   try{
+    const syncPayload={
+      ...DB,
+      deletedProjectIds:[]
+    };
     const res=await fetch(getApiBase()+'/projects/sync',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(DB)
+      body:JSON.stringify(syncPayload)
     });
     if(!res.ok){
       let msg='Failed to sync data';
@@ -4408,6 +4413,25 @@ async function syncRemoteDB(){
 function queueRemoteSync(delay=150){
   clearTimeout(syncTimer);
   syncTimer=setTimeout(()=>{syncRemoteDB();},delay);
+}
+async function deleteRemoteProject(id){
+  if(!id||shouldPersistBrowserDB()) return;
+  try{
+    const res=await fetch(getApiBase()+'/projects/'+encodeURIComponent(id),{
+      method:'DELETE'
+    });
+    if(!res.ok){
+      let msg='Failed to delete project on server';
+      try{
+        const data=await res.json();
+        msg=data?.error||msg;
+      }catch(e){}
+      throw new Error(msg);
+    }
+  }catch(e){
+    console.warn('Remote project delete failed:',e?.message||e);
+    toast('⚠ Project removed locally, but server delete failed. Refresh before continuing.',5000);
+  }
 }
 async function hydrateDBFromServer(){
   if(hydrateStarted) return;

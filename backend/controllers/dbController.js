@@ -56,13 +56,56 @@ function normalizeDB(data) {
   };
 }
 
+function isPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function arrayItemsHaveIds(items) {
+  return items.every((item) => isPlainObject(item) && item.id);
+}
+
+function mergePreservingArrayItems(currentValue, incomingValue) {
+  if (incomingValue === undefined) return currentValue;
+
+  if (Array.isArray(currentValue) && Array.isArray(incomingValue)) {
+    if (!arrayItemsHaveIds(currentValue) || !arrayItemsHaveIds(incomingValue)) {
+      return incomingValue.length >= currentValue.length ? incomingValue : currentValue;
+    }
+
+    const mergedById = new Map();
+    const order = [];
+
+    for (const item of currentValue) {
+      const id = String(item.id);
+      mergedById.set(id, item);
+      order.push(id);
+    }
+
+    for (const item of incomingValue) {
+      const id = String(item.id);
+      const existing = mergedById.get(id);
+      mergedById.set(id, existing ? mergePreservingArrayItems(existing, item) : item);
+      if (!order.includes(id)) order.push(id);
+    }
+
+    return order.map((id) => mergedById.get(id));
+  }
+
+  if (isPlainObject(currentValue) && isPlainObject(incomingValue)) {
+    const result = { ...currentValue };
+    for (const key of Object.keys(incomingValue)) {
+      result[key] = mergePreservingArrayItems(currentValue[key], incomingValue[key]);
+    }
+    return result;
+  }
+
+  return incomingValue;
+}
+
 function mergeProjectState(currentData, incomingData) {
   const current = normalizeDB(currentData);
   const incoming = normalizeDB(incomingData);
-  const deletedProjectIds = normalizeDeletedProjectIds([
-    ...current.deletedProjectIds,
-    ...incoming.deletedProjectIds
-  ]);
+  const deletedProjectIds = normalizeDeletedProjectIds(current.deletedProjectIds);
   const deleted = new Set(deletedProjectIds);
   const byId = new Map();
 
@@ -71,7 +114,10 @@ function mergeProjectState(currentData, incomingData) {
   }
 
   for (const project of incoming.projects || []) {
-    if (project?.id && !deleted.has(project.id)) byId.set(project.id, project);
+    if (project?.id && !deleted.has(project.id)) {
+      const existing = byId.get(project.id);
+      byId.set(project.id, existing ? mergePreservingArrayItems(existing, project) : project);
+    }
   }
 
   const projects = [...byId.values()];
@@ -175,10 +221,8 @@ async function saveAll(data) {
   const normalized = normalizeDB(data);
   const currentHasProjects = Array.isArray(current.projects) && current.projects.length > 0;
   const incomingHasProjects = Array.isArray(data?.projects) && normalized.projects.length > 0;
-  const deletedIds = new Set(normalized.deletedProjectIds || []);
-  const deletesKnownProject = (current.projects || []).some((project) => deletedIds.has(project.id));
 
-  if (currentHasProjects && !incomingHasProjects && !deletesKnownProject) {
+  if (currentHasProjects && !incomingHasProjects) {
     const err = new Error('Refusing to overwrite existing projects with an empty sync payload');
     err.statusCode = 409;
     throw err;
