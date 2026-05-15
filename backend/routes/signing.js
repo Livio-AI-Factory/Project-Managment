@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../controllers/dbController');
 const { sendEmailPayload } = require('../controllers/emailController');
@@ -222,15 +223,102 @@ function buildCertificatePdf(item, signature) {
   return buildSimpleTextPdfBuffer(text).toString('base64');
 }
 
+async function buildSignedPdf(item, signature) {
+  const originalContent = item.originalPdf?.content;
+  if (!originalContent) return null;
+
+  const pdfDoc = await PDFDocument.load(Buffer.from(originalContent, 'base64'), { ignoreEncryption: true });
+  const pages = pdfDoc.getPages();
+  const page = pages[pages.length - 1];
+  if (!page) return null;
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { width } = page.getSize();
+  const stampWidth = Math.min(260, Math.max(210, width - 80));
+  const stampHeight = 118;
+  const x = Math.max(36, width - stampWidth - 42);
+  const y = 42;
+  const signedDate = item.signedAt ? new Date(item.signedAt).toLocaleString('en-US') : '';
+
+  page.drawRectangle({
+    x,
+    y,
+    width: stampWidth,
+    height: stampHeight,
+    color: rgb(1, 1, 1),
+    borderColor: rgb(0.1, 0.34, 0.61),
+    borderWidth: 1
+  });
+  page.drawText('Electronically Signed', {
+    x: x + 12,
+    y: y + stampHeight - 22,
+    size: 10,
+    font: boldFont,
+    color: rgb(0.1, 0.34, 0.61)
+  });
+
+  const signatureBase64 = String(signature.signatureDataUrl || '').replace(/^data:image\/png;base64,/i, '');
+  if (signatureBase64) {
+    const signatureImage = await pdfDoc.embedPng(Buffer.from(signatureBase64, 'base64'));
+    const scaled = signatureImage.scaleToFit(stampWidth - 24, 40);
+    page.drawImage(signatureImage, {
+      x: x + 12,
+      y: y + 50,
+      width: scaled.width,
+      height: scaled.height
+    });
+  }
+
+  page.drawLine({
+    start: { x: x + 12, y: y + 48 },
+    end: { x: x + stampWidth - 12, y: y + 48 },
+    thickness: 0.7,
+    color: rgb(0.18, 0.22, 0.28)
+  });
+  page.drawText(`Name: ${signature.typedName || item.recipientName || ''}`, {
+    x: x + 12,
+    y: y + 32,
+    size: 8,
+    font,
+    color: rgb(0.1, 0.12, 0.16)
+  });
+  if (signature.title) {
+    page.drawText(`Title: ${signature.title}`, {
+      x: x + 12,
+      y: y + 20,
+      size: 8,
+      font,
+      color: rgb(0.1, 0.12, 0.16)
+    });
+  }
+  page.drawText(`Date: ${signedDate}`, {
+    x: x + 12,
+    y: y + 8,
+    size: 8,
+    font,
+    color: rgb(0.1, 0.12, 0.16)
+  });
+
+  const signedBytes = await pdfDoc.save();
+  const originalName = item.originalPdf?.filename || item.filename || 'document.pdf';
+  return {
+    filename: String(originalName).replace(/\.pdf$/i, '') + '-signed.pdf',
+    contentType: 'application/pdf',
+    content: Buffer.from(signedBytes).toString('base64')
+  };
+}
+
 function makeSignedFile(item) {
+  const signedPdf = item.signedPdf || item.signedCertificate;
   return {
     id: uuidv4(),
-    name: item.signedCertificate.filename,
-    filename: item.signedCertificate.filename,
-    size: Math.ceil(String(item.signedCertificate.content || '').length * 0.75),
+    name: signedPdf.filename,
+    filename: signedPdf.filename,
+    size: Math.ceil(String(signedPdf.content || '').length * 0.75),
     type: 'application/pdf',
     contentType: 'application/pdf',
-    data: `data:application/pdf;base64,${item.signedCertificate.content}`,
+    data: `data:application/pdf;base64,${signedPdf.content}`,
     at: item.signedAt,
     signingRequestId: item.id,
     signedAt: item.signedAt,
@@ -611,6 +699,12 @@ apiRouter.post('/:token/sign', async (req, res) => {
       contentType: 'application/pdf',
       content: buildCertificatePdf(item, item.signature)
     };
+    try {
+      item.signedPdf = await buildSignedPdf(item, item.signature);
+    } catch (pdfErr) {
+      console.error('Signed PDF stamp error:', pdfErr);
+      item.signedPdfError = pdfErr.message || 'Could not stamp signature on PDF';
+    }
 
     applySignatureToProject(state, item);
     await db.saveAll(state);
