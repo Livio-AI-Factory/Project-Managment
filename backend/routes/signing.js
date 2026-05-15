@@ -56,6 +56,14 @@ function sanitizeText(value, max = 5000) {
   return String(value || '').trim().slice(0, max);
 }
 
+function sanitizeSignatureDataUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (!/^data:image\/png;base64,/i.test(raw)) return '';
+  // Keep the signature image small enough for the JSON-backed app state.
+  return raw.length <= 350000 ? raw : '';
+}
+
 function findSigningRequest(state, token) {
   const hash = tokenHash(token);
   return (state.signingRequests || []).find((item) => item.tokenHash === hash) || null;
@@ -199,6 +207,7 @@ function buildCertificatePdf(item, signature) {
     `Signed At: ${item.signedAt}`,
     `IP Address: ${signature.ip || ''}`,
     `User Agent: ${signature.userAgent || ''}`,
+    `Drawn Signature Captured: ${signature.signatureDataUrl ? 'Yes' : 'No'}`,
     '',
     'Consent:',
     'The signer reviewed the electronic document and affirmatively agreed to sign electronically.',
@@ -291,14 +300,19 @@ function renderSigningPage(item, token) {
   <style>
     body{margin:0;font-family:Arial,sans-serif;background:#f6f7f9;color:#1d2430}
     header{background:#0c1b2e;color:#fff;padding:18px 24px}
-    main{max-width:1080px;margin:0 auto;padding:22px}
-    .grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px}
+    main{max-width:1180px;margin:0 auto;padding:22px}
+    .grid{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:18px}
     .panel{background:#fff;border:1px solid #d8dde6;border-radius:8px;box-shadow:0 8px 20px rgba(20,30,45,.06)}
-    .doc{height:calc(100vh - 150px);min-height:520px}
+    .doc{height:calc(100vh - 150px);min-height:560px;overflow:hidden}
     iframe{width:100%;height:100%;border:0;border-radius:8px}
     .form{padding:18px}
     label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;color:#607086;margin:14px 0 5px}
     input{width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd3df;border-radius:6px;font-size:14px}
+    .signature-box{border:1px solid #cbd3df;border-radius:7px;background:#fff;margin-top:6px;overflow:hidden}
+    canvas{display:block;width:100%;height:150px;touch-action:none;background:linear-gradient(#fff,#fff),repeating-linear-gradient(0deg,transparent,transparent 35px,#f1f4f8 36px)}
+    .sig-actions{display:flex;gap:8px;border-top:1px solid #edf0f5;padding:8px;background:#fafbfc}
+    .sig-actions button{width:auto;flex:1;background:#eef5ff;color:#1a6bc4;border:1px solid #bfdbfe;padding:8px}
+    .typed-preview{font-family:"Brush Script MT","Segoe Script",cursive;font-size:28px;color:#0c1b2e;padding:12px 14px;border:1px dashed #cbd3df;border-radius:7px;background:#fbfcfe;min-height:38px}
     .check{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-size:13px;line-height:1.45}
     .check input{width:auto;margin-top:2px}
     button{width:100%;padding:12px 14px;border:0;border-radius:6px;background:#1a6bc4;color:#fff;font-weight:700;cursor:pointer}
@@ -330,8 +344,17 @@ function renderSigningPage(item, token) {
         <form id="signForm">
           <label for="typedName">Full Legal Name</label>
           <input id="typedName" name="typedName" autocomplete="name" required ${disabled ? 'disabled' : ''}/>
+          <div class="typed-preview" id="typedPreview">Signature preview</div>
           <label for="title">Title</label>
           <input id="title" name="title" placeholder="Owner, Project Manager, Authorized Agent" ${disabled ? 'disabled' : ''}/>
+          <label>Draw Signature</label>
+          <div class="signature-box">
+            <canvas id="signaturePad" width="700" height="260"></canvas>
+            <div class="sig-actions">
+              <button type="button" id="clearSignature" ${disabled ? 'disabled' : ''}>Clear</button>
+              <button type="button" id="useTypedSignature" ${disabled ? 'disabled' : ''}>Use typed name</button>
+            </div>
+          </div>
           <div class="check">
             <input id="agreed" name="agreed" type="checkbox" required ${disabled ? 'disabled' : ''}/>
             <label for="agreed" style="margin:0;text-transform:none;font-size:13px;font-weight:600;color:#1d2430">I reviewed this document and agree to sign it electronically.</label>
@@ -344,14 +367,88 @@ function renderSigningPage(item, token) {
   <script>
     const form=document.getElementById('signForm');
     const statusEl=document.getElementById('status');
+    const typedNameEl=document.getElementById('typedName');
+    const typedPreview=document.getElementById('typedPreview');
+    const canvas=document.getElementById('signaturePad');
+    const ctx=canvas.getContext('2d');
+    let drawing=false;
+    let hasDrawnSignature=false;
+
+    function setupCanvas(){
+      ctx.lineWidth=3;
+      ctx.lineCap='round';
+      ctx.lineJoin='round';
+      ctx.strokeStyle='#0c1b2e';
+    }
+    function pointerPosition(event){
+      const rect=canvas.getBoundingClientRect();
+      const source=event.touches&&event.touches[0] ? event.touches[0] : event;
+      return {
+        x:(source.clientX-rect.left)*(canvas.width/rect.width),
+        y:(source.clientY-rect.top)*(canvas.height/rect.height)
+      };
+    }
+    function startDraw(event){
+      if(${disabled ? 'true' : 'false'}) return;
+      event.preventDefault();
+      drawing=true;
+      hasDrawnSignature=true;
+      const pos=pointerPosition(event);
+      ctx.beginPath();
+      ctx.moveTo(pos.x,pos.y);
+    }
+    function draw(event){
+      if(!drawing) return;
+      event.preventDefault();
+      const pos=pointerPosition(event);
+      ctx.lineTo(pos.x,pos.y);
+      ctx.stroke();
+    }
+    function stopDraw(){
+      drawing=false;
+    }
+    function clearSignature(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      hasDrawnSignature=false;
+    }
+    function drawTypedSignature(){
+      clearSignature();
+      const name=(typedNameEl.value||'').trim();
+      if(!name) return;
+      ctx.font='54px "Brush Script MT", "Segoe Script", cursive';
+      ctx.fillStyle='#0c1b2e';
+      ctx.fillText(name,40,150);
+      hasDrawnSignature=true;
+    }
+    function updateTypedPreview(){
+      const name=(typedNameEl.value||'').trim();
+      typedPreview.textContent=name||'Signature preview';
+    }
+    setupCanvas();
+    typedNameEl.addEventListener('input',updateTypedPreview);
+    canvas.addEventListener('mousedown',startDraw);
+    canvas.addEventListener('mousemove',draw);
+    window.addEventListener('mouseup',stopDraw);
+    canvas.addEventListener('touchstart',startDraw,{passive:false});
+    canvas.addEventListener('touchmove',draw,{passive:false});
+    canvas.addEventListener('touchend',stopDraw);
+    document.getElementById('clearSignature').addEventListener('click',clearSignature);
+    document.getElementById('useTypedSignature').addEventListener('click',drawTypedSignature);
+
     form.addEventListener('submit',async(event)=>{
       event.preventDefault();
+      if(!hasDrawnSignature){
+        statusEl.className='status error';
+        statusEl.textContent='Please draw your signature or click Use typed name.';
+        return;
+      }
       statusEl.className='status';
       statusEl.textContent='Submitting signature...';
       const body={
         typedName:document.getElementById('typedName').value,
         title:document.getElementById('title').value,
-        agreed:document.getElementById('agreed').checked
+        agreed:document.getElementById('agreed').checked,
+        signatureDataUrl:canvas.toDataURL('image/png')
       };
       try{
         const res=await fetch('/api/signing/${encodeURIComponent(token)}/sign',{
@@ -430,11 +527,13 @@ apiRouter.post('/send', async (req, res) => {
     await db.saveAll(state);
 
     const emailMessage = [
-      message,
+      'ACTION REQUIRED: Review & digitally sign this document',
       '',
-      'Please review and sign this document using the secure link below:',
       signingUrl,
       '',
+      message,
+      '',
+      'A PDF copy is attached for reference, but the signature must be completed using the secure link above.',
       'This link is unique to you. Please do not forward it.',
       '',
       'Thank you,',
@@ -483,9 +582,11 @@ apiRouter.post('/:token/sign', async (req, res) => {
   try {
     const typedName = sanitizeText(req.body?.typedName, 200);
     const title = sanitizeText(req.body?.title, 200);
+    const signatureDataUrl = sanitizeSignatureDataUrl(req.body?.signatureDataUrl);
     const agreed = req.body?.agreed === true || req.body?.agreed === 'true';
     if (!typedName) return res.status(400).json({ error: 'Full legal name is required' });
     if (!agreed) return res.status(400).json({ error: 'Electronic signature consent is required' });
+    if (!signatureDataUrl) return res.status(400).json({ error: 'Drawn signature is required' });
 
     const state = await db.getAll();
     const item = findSigningRequest(state, req.params.token);
@@ -499,6 +600,7 @@ apiRouter.post('/:token/sign', async (req, res) => {
       typedName,
       title,
       agreed: true,
+      signatureDataUrl,
       ip: req.ip || req.headers['x-forwarded-for'] || '',
       userAgent: req.headers['user-agent'] || '',
       signedAt: item.signedAt
