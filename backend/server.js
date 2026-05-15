@@ -79,6 +79,9 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/email', require('./routes/email'));
 app.use('/api/files', require('./routes/files'));
+const signingRoutes = require('./routes/signing');
+app.use('/api/signing', signingRoutes.apiRouter);
+app.use('/sign', signingRoutes.pageRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({
