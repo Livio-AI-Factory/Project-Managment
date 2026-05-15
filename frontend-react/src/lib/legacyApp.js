@@ -4697,6 +4697,19 @@ async function sendAppEmail(payload){
   }
   return data;
 }
+async function sendSigningRequest(payload){
+  const apiBase=getEmailApiBase();
+  const res=await fetch(apiBase+'/signing/send',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){
+    throw new Error(data.error||data.message||('Signing request failed ('+res.status+')'));
+  }
+  return data;
+}
 async function verifyEmailConfigRequest(cfg){
   const apiBase=getEmailApiBase();
   const res=await fetch(apiBase+'/email/verify',{
@@ -6910,6 +6923,42 @@ function sendContractEmail(vid){
   openContractEmailModal(vid);
 }
 
+sendLienEmail = function(){
+  const to=vEl('lien-email-to').value.trim();
+  const subject=vEl('lien-email-subject').value.trim();
+  const body=vEl('lien-email-body').value.trim();
+  const invId=vEl('lien-email-invid')?.value;
+  const waiverType=vEl('lien-email-type')?.value;
+  const partialPaymentId=vEl('mo-lien-email')?.dataset?.partialPaymentId||'';
+  if(!to){toast('Recipient email is required');return;}
+  let attachments=[];
+  let data=null;
+  try{
+    data=getLienWaiverEmailData(invId, waiverType, partialPaymentId);
+    if(invId&&waiverType){
+      attachments=[buildLienWaiverPdfAttachment(invId, waiverType, partialPaymentId)];
+    }
+  }catch(err){
+    toast('Unable to attach lien waiver PDF: '+(err.message||err),'error',6000);
+    return;
+  }
+  sendSigningRequest({
+    type:'lien_waiver',
+    projectId:data?.p?.id||proj()?.id||'',
+    invoiceId:invId,
+    waiverType,
+    partialPaymentId,
+    recipientName:data?.vendorName||to,
+    recipientEmail:to,
+    subject,
+    message:body,
+    attachment:attachments[0],
+    filename:attachments[0]?.filename
+  })
+    .then(function(){_saveLienSent(to);closeLienEmail();toast('Lien waiver signing link sent');})
+    .catch(function(err){console.error('Signing request error:',err);toast('Signing request failed: '+err.message,'error',6000);});
+}
+
 function openContractEmailModal(vid){
   const p=proj(); if(!p)return;
   const v=(p.vendors||[]).find(x=>x.id===vid); if(!v)return;
@@ -6973,7 +7022,7 @@ openContractEmailModal = function(vid){
   const subject='Subcontract Agreement — '+v.vendor+' / '+p.name;
   const msPart=(v.milestones||[]).length?'\n\nPayment Milestones:\n'+v.milestones.map(function(ms){return'  • '+ms.name+' ($'+Number(ms.amount||0).toLocaleString()+')';}).join('\n'):'';
   const contractForLine=v.contractFor?'\nContract For: '+v.contractFor:'';
-  const body='Dear '+v.vendor+',\n\nPlease find attached the signed Subcontract Agreement for:\n\nProject: '+p.name+'\nProject Address: '+getProjectAddressLine(p)+'\nLivio Address: '+LIVIO_OFFICE_ADDRESS+'\nContract #: '+(v.contractNo||'N/A')+contractForLine+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nReply Email: '+LIVIO_REPLY_EMAIL+'\n\nThis contract copy is automatically signed and attached when the email is sent.\n\nBest regards,\n'+getLivioEmailSignature();
+  const body='Dear '+v.vendor+',\n\nPlease review and digitally sign the Subcontract Agreement for:\n\nProject: '+p.name+'\nProject Address: '+getProjectAddressLine(p)+'\nLivio Address: '+LIVIO_OFFICE_ADDRESS+'\nContract #: '+(v.contractNo||'N/A')+contractForLine+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nReply Email: '+LIVIO_REPLY_EMAIL+'\n\nA secure signing link will be included in this email.\n\nBest regards,\n'+getLivioEmailSignature();
   vEl('cemail-vid').value=vid;
   vEl('cemail-to').value=email;
   vEl('cemail-subject').value=subject;
@@ -7416,29 +7465,39 @@ sendContractEmailModal = async function(){
   const vid=vEl('cemail-vid').value.trim();
   if(!to){toast('Recipient email is required');return;}
   let attachments=[];
-  let signing=null;
+  let found=null;
   try{
-    if(vid) signing=prepareVendorContractAutoSignature(vid,to);
+    if(vid) found=findVendorContractById(vid);
     if(vid) attachments=await getVendorContractEmailAttachments(vid);
   }catch(err){
-    if(signing) restoreVendorContractSigning(signing.found.v,signing.snapshot);
     toast('Could not attach contract PDF: '+err.message,'error',6000);
     return;
   }
-  sendAppEmail({to,subject,message:body,attachments})
+  sendSigningRequest({
+    type:'vendor_contract',
+    projectId:found?.p?.id||proj()?.id||'',
+    vendorId:vid,
+    recipientName:found?.v?.vendor||to,
+    recipientEmail:to,
+    subject,
+    message:body,
+    attachment:attachments[0],
+    filename:attachments[0]?.filename
+  })
     .then(function(){
-      if(signing){
-        rememberSignedVendorContractAttachment(signing.found.v,attachments[0]);
+      if(found?.v){
+        found.v.sentForSignatureAt=new Date().toISOString();
+        found.v.sentForSignatureTo=to;
+        found.v.signingStatus='sent';
         saveDB();
         renderAll();
       }
       closeContractEmailModal();
-      toast('Contract email sent with signed PDF attachment');
+      toast('Contract signing link sent');
     })
     .catch(function(err){
-      if(signing) restoreVendorContractSigning(signing.found.v,signing.snapshot);
-      console.error('Email error:',err);
-      toast('Email send failed: '+err.message,'error',6000);
+      console.error('Signing request error:',err);
+      toast('Signing request failed: '+err.message,'error',6000);
     });
 }
 

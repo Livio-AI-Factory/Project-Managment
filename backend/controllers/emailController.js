@@ -351,16 +351,7 @@ async function sendEmail(req, res) {
     if (!subject) return res.status(400).json({ error: 'Subject is required' });
     if (!message) return res.status(400).json({ error: 'Message body is required' });
 
-    const provider = getEmailProvider();
-    if (!provider) {
-      return res.status(500).json({
-        error: 'Email service is not configured. Set RESEND_API_KEY or SMTP credentials on the backend.'
-      });
-    }
-
-    const result = provider === 'resend'
-      ? await sendViaResend({ to, cc, subject, message, fromName, replyTo, attachments, generatedPdf })
-      : await sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride, attachments, generatedPdf });
+    const result = await sendEmailPayload({ to, cc, subject, message, fromName, replyTo, smtpOverride, attachments, generatedPdf });
 
     return res.json(result);
   } catch (err) {
@@ -370,6 +361,18 @@ async function sendEmail(req, res) {
       details: err.response || null
     });
   }
+}
+
+async function sendEmailPayload(payload = {}) {
+  const { to, cc, subject, message, fromName, replyTo, smtpOverride, attachments, generatedPdf } = payload;
+  const provider = getEmailProvider();
+  if (!provider) {
+    throw new Error('Email service is not configured. Set RESEND_API_KEY or SMTP credentials on the backend.');
+  }
+
+  return provider === 'resend'
+    ? await sendViaResend({ to, cc, subject, message, fromName, replyTo, attachments, generatedPdf })
+    : await sendViaSmtp({ to, cc, subject, message, fromName, replyTo, smtpOverride, attachments, generatedPdf });
 }
 
 async function verifyEmailService(req, res) {
@@ -425,6 +428,7 @@ function escapeHtml(str) {
 module.exports = {
   getEmailProvider,
   getEmailStatusData,
+  sendEmailPayload,
   sendEmail,
   verifyEmailService
 };
