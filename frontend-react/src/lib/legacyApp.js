@@ -495,6 +495,7 @@ function normalizeVendorContract(entry, vendorDirectory=[]){
     routingNo: routing,
     zelle,
     zelleId: zelle,
+    contractFor: String(raw.contractFor||'').trim(),
     files: Array.isArray(raw.files)?raw.files:[],
     milestones: Array.isArray(raw.milestones)?raw.milestones:[]
   };
@@ -2079,11 +2080,15 @@ function openModal(type, id=null){
       <div style="font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--navy)">2. Contract Details</div>
       <div class="fg">
         <div class="fr"><label class="fl">Contract Number</label><input class="fi" id="f-ven-no" value="${o.contractNo||''}" placeholder="e.g. SC-2026-001"/></div>
-        <div class="fr"><label class="fl">Contract Value ($)</label><input class="fi" id="f-ven-amt" type="number" value="${o.amount||''}" placeholder="0" oninput="venUpdateMilestonePct()"/></div>
+        <div class="fr"><label class="fl">What Is Contract For</label><input class="fi" id="f-ven-for" value="${o.contractFor||''}" placeholder="e.g. Rough plumbing, framing labor, HVAC install"/></div>
       </div>
       <div class="fg">
+        <div class="fr"><label class="fl">Contract Value ($)</label><input class="fi" id="f-ven-amt" type="number" value="${o.amount||''}" placeholder="0" oninput="venUpdateMilestonePct()"/></div>
         <div class="fr"><label class="fl">Contract Type</label><select class="fs" id="f-ven-type">${contractTypes.map(t=>`<option ${o.contractType===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      </div>
+      <div class="fg">
         <div class="fr"><label class="fl">Status</label><select class="fs" id="f-ven-status">${statuses.map(([v,l])=>`<option value="${v}" ${o.status===v?'selected':''}>${l}</option>`).join('')}</select></div>
+        <div class="fr"></div>
       </div>
       <div class="fg">
         <div class="fr"><label class="fl">Start Date</label><input class="fi" id="f-ven-start" type="date" value="${o.startDate||''}"/></div>
@@ -2538,6 +2543,7 @@ function saveModal(){
       zelle,
       zelleId:zelle,
       contractNo:vVal('f-ven-no'),
+      contractFor:vVal('f-ven-for'),
       amount:parseFloat(vVal('f-ven-amt'))||0,
       contractType:vVal('f-ven-type'),
       status:vVal('f-ven-status'),
@@ -6238,6 +6244,7 @@ function renderVendors(){
           <span class="ph-title" style="color:#fff;font-size:14px">${v.vendor}</span>
           ${q?`<span style="font-size:11px;color:#8AAAC8;margin-left:10px">${q.scope||''}</span>`:''}
           ${v.contractNo?`<span style="background:rgba(255,255,255,.1);color:#8AAAC8;font-size:10px;padding:2px 8px;border-radius:4px;margin-left:8px">Contract # ${v.contractNo}</span>`:''}
+          ${v.contractFor?`<span style="background:rgba(255,255,255,.1);color:#F3D38B;font-size:10px;padding:2px 8px;border-radius:4px;margin-left:8px">${v.contractFor}</span>`:''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-xs" style="background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:10px" onclick="generateVendorContract('${v.id}')">🖨 View Contract PDF</button>
@@ -6248,6 +6255,7 @@ function renderVendors(){
         </div>
       </div>
       <div style="padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+        <div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Contract For</div><div style="font-size:12px;font-weight:600">${v.contractFor||'—'}</div></div>
         <div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Contract Type</div><div style="font-size:12px;font-weight:600">${v.contractType||'—'}</div></div>
         <div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Contract Value</div><div style="font-size:14px;font-weight:700;font-family:'Barlow Condensed',sans-serif;color:var(--navy)">${v.amount?'$'+Number(v.amount).toLocaleString():'—'}</div></div>
         <div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Start Date</div><div style="font-size:12px">${v.startDate?fmtDate(v.startDate):'—'}</div></div>
@@ -6406,6 +6414,7 @@ function generateVendorContract(vid){
     +'</div>'
     +'<div class="section"><div class="section-title">1. Contract Details</div>'
       +'<table style="width:100%;border-collapse:collapse"><tbody>'
+      +(v.contractFor?'<tr><td style="padding:4px 0;width:40%;font-weight:600;font-size:11px">Contract For</td><td style="padding:4px 0;font-size:11px">'+v.contractFor+'</td></tr>':'')
       +'<tr><td style="padding:4px 0;width:40%;font-weight:600;font-size:11px">Contract Type</td><td style="padding:4px 0;font-size:11px">'+(v.contractType||'—')+'</td></tr>'
       +'<tr><td style="padding:4px 0;font-weight:600;font-size:11px">Contract Value</td><td style="padding:4px 0;font-size:13px;font-weight:700;color:#0C1B2E">$'+Number(v.amount||0).toLocaleString()+'</td></tr>'
       +'<tr><td style="padding:4px 0;font-weight:600;font-size:11px">Start Date</td><td style="padding:4px 0;font-size:11px">'+(v.startDate||'—')+'</td></tr>'
@@ -6460,7 +6469,8 @@ function getVendorContractEmailData(vid){
   const email=(v.vendorEmail||vdir?.email||getVendorEmailAcrossProjects(v.vendor)||'').trim();
   const subject='Subcontract Agreement â€” '+v.vendor+' / '+p.name;
   const msPart=(v.milestones||[]).length?'\n\nPayment Milestones:\n'+v.milestones.map(function(ms){return'  â€¢ '+ms.name+' ($'+Number(ms.amount||0).toLocaleString()+')';}).join('\n'):'';
-  const body='Dear '+v.vendor+',\n\nPlease find attached the Subcontract Agreement for:\n\nProject: '+p.name+'\nProject Address: '+getProjectAddressLine(p)+'\nLivio Address: '+LIVIO_OFFICE_ADDRESS+'\nContract #: '+(v.contractNo||'N/A')+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nReply Email: '+LIVIO_REPLY_EMAIL+'\n\nPlease review, sign, and return at your earliest convenience.\n\nBest regards,\n'+getLivioEmailSignature();
+  const contractForLine=v.contractFor?'\nContract For: '+v.contractFor:'';
+  const body='Dear '+v.vendor+',\n\nPlease find attached the Subcontract Agreement for:\n\nProject: '+p.name+'\nProject Address: '+getProjectAddressLine(p)+'\nLivio Address: '+LIVIO_OFFICE_ADDRESS+'\nContract #: '+(v.contractNo||'N/A')+contractForLine+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nReply Email: '+LIVIO_REPLY_EMAIL+'\n\nPlease review, sign, and return at your earliest convenience.\n\nBest regards,\n'+getLivioEmailSignature();
   return { p, v, vdir, email, subject, body };
 }
 
@@ -6543,6 +6553,7 @@ function buildVendorContractPdfAttachment(vid){
   if(vdir?.address) writeLabelValue('Vendor Address:',vdir.address);
   if(v.vendorEmail||vdir?.email) writeLabelValue('Vendor Email:',v.vendorEmail||vdir?.email);
   writeLabelValue('Contract #:',v.contractNo||'â€”');
+  writeLabelValue('Contract For:',v.contractFor||'â€”');
   writeLabelValue('Contract Type:',v.contractType||'â€”');
   writeLabelValue('Contract Value:',fmtMoney(v.amount||0));
   writeLabelValue('Start Date:',v.startDate?fmtDate(v.startDate):'â€”');
@@ -6905,7 +6916,8 @@ function openContractEmailModal(vid){
   const email=v.vendorEmail||'';
   const subject='Subcontract Agreement — '+v.vendor+' / '+p.name;
   const msPart=(v.milestones||[]).length?'\n\nPayment Milestones:\n'+v.milestones.map(function(ms){return'  • '+ms.name+' ($'+Number(ms.amount||0).toLocaleString()+')';}).join('\n'):'';
-  const body='Dear '+v.vendor+',\n\nPlease find attached the Subcontract Agreement for:\n\nProject: '+p.name+'\nAddress: '+(p.address||'')+'\nContract #: '+(v.contractNo||'N/A')+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nPlease review, sign, and return at your earliest convenience.\n\nBest regards,\nLivio Building Systems';
+  const contractForLine=v.contractFor?'\nContract For: '+v.contractFor:'';
+  const body='Dear '+v.vendor+',\n\nPlease find attached the Subcontract Agreement for:\n\nProject: '+p.name+'\nAddress: '+(p.address||'')+'\nContract #: '+(v.contractNo||'N/A')+contractForLine+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nPlease review, sign, and return at your earliest convenience.\n\nBest regards,\nLivio Building Systems';
   vEl('cemail-vid').value=vid;
   vEl('cemail-to').value=email;
   vEl('cemail-subject').value=subject;
@@ -6960,7 +6972,8 @@ openContractEmailModal = function(vid){
   const email=(v.vendorEmail||getVendorEmailAcrossProjects(v.vendor)||'').trim();
   const subject='Subcontract Agreement — '+v.vendor+' / '+p.name;
   const msPart=(v.milestones||[]).length?'\n\nPayment Milestones:\n'+v.milestones.map(function(ms){return'  • '+ms.name+' ($'+Number(ms.amount||0).toLocaleString()+')';}).join('\n'):'';
-  const body='Dear '+v.vendor+',\n\nPlease find attached the signed Subcontract Agreement for:\n\nProject: '+p.name+'\nProject Address: '+getProjectAddressLine(p)+'\nLivio Address: '+LIVIO_OFFICE_ADDRESS+'\nContract #: '+(v.contractNo||'N/A')+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nReply Email: '+LIVIO_REPLY_EMAIL+'\n\nThis contract copy is automatically signed and attached when the email is sent.\n\nBest regards,\n'+getLivioEmailSignature();
+  const contractForLine=v.contractFor?'\nContract For: '+v.contractFor:'';
+  const body='Dear '+v.vendor+',\n\nPlease find attached the signed Subcontract Agreement for:\n\nProject: '+p.name+'\nProject Address: '+getProjectAddressLine(p)+'\nLivio Address: '+LIVIO_OFFICE_ADDRESS+'\nContract #: '+(v.contractNo||'N/A')+contractForLine+'\nContract Value: $'+Number(v.amount||0).toLocaleString()+msPart+'\n\nReply Email: '+LIVIO_REPLY_EMAIL+'\n\nThis contract copy is automatically signed and attached when the email is sent.\n\nBest regards,\n'+getLivioEmailSignature();
   vEl('cemail-vid').value=vid;
   vEl('cemail-to').value=email;
   vEl('cemail-subject').value=subject;
@@ -7285,6 +7298,7 @@ buildVendorContractPdfAttachment = function(vid){
   y=boxY+Math.max(leftBoxH,rightBoxH)+32;
 
   drawSectionTitle('1. Contract Details');
+  drawDetailRow('Contract For',v.contractFor||'-');
   drawDetailRow('Contract Type',v.contractType||'-');
   drawDetailRow('Contract Value',fmtMoney(v.amount||0));
   drawDetailRow('Start Date',v.startDate||'-');
