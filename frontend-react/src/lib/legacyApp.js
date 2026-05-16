@@ -6832,11 +6832,14 @@ function buildLienWaiverPdfAttachment(invId, waiverType, partialPaymentId){
   doc.text('Claimant\'s Signature',ML,y);
   doc.text('Date of Signature',W-MR-110,y);
   y+=30;
+  const claimantSignatureLineY=y;
+  const dateSignatureLineY=y;
   doc.line(ML,y,W-180,y);
   doc.line(W-150,y,W-MR,y);
   y+=28;
   doc.text('Claimant\'s Title',ML,y);
   y+=30;
+  const claimantTitleLineY=y;
   doc.line(ML,y,W-240,y);
 
   doc.setFont('helvetica','italic');
@@ -6851,7 +6854,30 @@ function buildLienWaiverPdfAttachment(invId, waiverType, partialPaymentId){
   return {
     filename:`${safeInv}-${safeType}.pdf`,
     content,
-    contentType:'application/pdf'
+    contentType:'application/pdf',
+    signaturePlacement:{
+      lienWaiver:{
+        signature:{
+          x:ML+4,
+          y:doc.internal.pageSize.getHeight()-claimantSignatureLineY+5,
+          width:W-180-ML-12,
+          height:30
+        },
+        date:{
+          x:W-150+4,
+          y:doc.internal.pageSize.getHeight()-dateSignatureLineY+9,
+          width:W-MR-(W-150)-8,
+          size:10,
+          includeTime:false
+        },
+        title:{
+          x:ML+4,
+          y:doc.internal.pageSize.getHeight()-claimantTitleLineY+9,
+          width:W-240-ML-12,
+          size:10
+        }
+      }
+    }
   };
 }
 function openLienEmail(invId, waiverType, partialPaymentId){
@@ -7422,25 +7448,26 @@ buildVendorContractPdfAttachment = function(vid){
 
   ensureSpace(82);
   const sigY=y+24;
+  const subcontractorSigX=pageW-right-220;
   doc.setDrawColor(120,120,120);
   doc.setLineWidth(0.8);
   doc.line(left,sigY,left+220,sigY);
-  doc.line(pageW-right-220,sigY,pageW-right,sigY);
+  doc.line(subcontractorSigX,sigY,pageW-right,sigY);
   if(isSigned){
     setFont(15,'italic',blue);
     doc.text(LIVIO_COMPANY_NAME,left,sigY-8);
-    doc.text(v.signatureName||v.vendor||'Subcontractor',pageW-right-220,sigY-8);
+    doc.text(v.signatureName||v.vendor||'Subcontractor',subcontractorSigX,sigY-8);
   }
   setFont(9,'normal',muted);
   doc.text('Owner / General Contractor',left,sigY+14);
-  doc.text('Subcontractor Signature',pageW-right-220,sigY+14);
+  doc.text('Subcontractor Signature',subcontractorSigX,sigY+14);
   setFont(11,'bold',text);
   doc.text(LIVIO_COMPANY_NAME,left,sigY+32);
-  doc.text(v.vendor||'Subcontractor',pageW-right-220,sigY+32);
+  doc.text(v.vendor||'Subcontractor',subcontractorSigX,sigY+32);
   if(isSigned){
     setFont(8.5,'normal',muted);
     doc.text('Electronically signed on '+signedOn,left,sigY+48);
-    doc.text('Auto-signed on '+signedOn,pageW-right-220,sigY+48);
+    doc.text('Auto-signed on '+signedOn,subcontractorSigX,sigY+48);
   }
 
   const dataUri=doc.output('datauristring');
@@ -7450,7 +7477,31 @@ buildVendorContractPdfAttachment = function(vid){
   return {
     filename:`${safeVendor}-${safeProject}-${isSigned?'signed-':''}contract.pdf`,
     content,
-    contentType:'application/pdf'
+    contentType:'application/pdf',
+    signaturePlacement:{
+      vendorContract:{
+        signature:{
+          x:subcontractorSigX+4,
+          y:pageH-sigY+5,
+          width:212,
+          height:34
+        },
+        date:{
+          x:subcontractorSigX,
+          y:pageH-(sigY+48),
+          width:240,
+          size:8.5,
+          prefix:'Electronically signed on '
+        },
+        title:{
+          x:subcontractorSigX,
+          y:pageH-(sigY+62),
+          width:240,
+          size:8.5,
+          prefix:'Title: '
+        }
+      }
+    }
   };
 }
 

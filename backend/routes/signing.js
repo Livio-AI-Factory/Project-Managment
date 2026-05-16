@@ -65,6 +65,13 @@ function sanitizeSignatureDataUrl(value) {
   return raw.length <= 350000 ? raw : '';
 }
 
+function sanitizeSignaturePlacement(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const json = JSON.stringify(value);
+  if (json.length > 5000) return null;
+  return JSON.parse(json);
+}
+
 function findSigningRequest(state, token) {
   const hash = tokenHash(token);
   return (state.signingRequests || []).find((item) => item.tokenHash === hash) || null;
@@ -223,23 +230,232 @@ function buildCertificatePdf(item, signature) {
   return buildSimpleTextPdfBuffer(text).toString('base64');
 }
 
-async function buildSignedPdf(item, signature) {
-  const originalContent = item.originalPdf?.content;
-  if (!originalContent) return null;
+function formatSignedDate(value, includeTime = false) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return includeTime ? date.toLocaleString('en-US') : date.toLocaleDateString('en-US');
+}
 
-  const pdfDoc = await PDFDocument.load(Buffer.from(originalContent, 'base64'), { ignoreEncryption: true });
-  const pages = pdfDoc.getPages();
-  const page = pages[pages.length - 1];
-  if (!page) return null;
+function fitTextToWidth(text, font, size, maxWidth) {
+  const value = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!value || !font || !maxWidth) return value;
+  if (font.widthOfTextAtSize(value, size) <= maxWidth) return value;
 
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  let clipped = value;
+  while (clipped.length > 1 && font.widthOfTextAtSize(`${clipped}...`, size) > maxWidth) {
+    clipped = clipped.slice(0, -1).trimEnd();
+  }
+  return `${clipped}...`;
+}
+
+function drawFittedText(page, text, { x, y, maxWidth, size, font, color }) {
+  const fitted = fitTextToWidth(text, font, size, maxWidth);
+  if (!fitted) return;
+  page.drawText(fitted, { x, y, size, font, color });
+}
+
+function findPdfLabelPosition(pdfBytes, label) {
+  const pdfText = Buffer.from(pdfBytes).toString('latin1');
+  const index = pdfText.lastIndexOf(label);
+  if (index < 0) return null;
+
+  const before = pdfText.slice(Math.max(0, index - 1800), index);
+  const operators = [];
+  const tdPattern = /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Td\b/g;
+  const tmPattern = /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Tm\b/g;
+
+  let match;
+  while ((match = tdPattern.exec(before))) {
+    operators.push({ at: match.index, x: Number(match[1]), y: Number(match[2]) });
+  }
+  while ((match = tmPattern.exec(before))) {
+    operators.push({ at: match.index, x: Number(match[5]), y: Number(match[6]) });
+  }
+  operators.sort((a, b) => a.at - b.at);
+
+  const position = operators[operators.length - 1];
+  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return null;
+  return { x: position.x, y: position.y };
+}
+
+function drawSignatureImage(page, signatureImage, { x, y, maxWidth, maxHeight }) {
+  if (!signatureImage) return false;
+  const scaled = signatureImage.scaleToFit(maxWidth, maxHeight);
+  page.drawImage(signatureImage, {
+    x,
+    y: y + Math.max(0, (maxHeight - scaled.height) / 2),
+    width: scaled.width,
+    height: scaled.height
+  });
+  return true;
+}
+
+function drawLienWaiverSignatureFields(page, originalBytes, item, signature, signatureImage, fonts) {
+  const placed = drawPlacedSignatureFields(
+    page,
+    item.signaturePlacement?.lienWaiver,
+    item,
+    signature,
+    signatureImage,
+    fonts
+  );
+  if (placed) return true;
+
+  const { width, height } = page.getSize();
+  const signedDate = formatSignedDate(item.signedAt);
+  const signatureLabel = findPdfLabelPosition(originalBytes, "Claimant's Signature");
+  const dateLabel = findPdfLabelPosition(originalBytes, 'Date of Signature');
+  const titleLabel = findPdfLabelPosition(originalBytes, "Claimant's Title");
+
+  const signatureLineY = signatureLabel ? signatureLabel.y - 30 : 126;
+  const signatureX = signatureLabel ? signatureLabel.x : 40;
+  const dateX = dateLabel ? dateLabel.x : Math.max(width - 150, signatureX + 360);
+  const titleLineY = titleLabel ? titleLabel.y - 30 : Math.max(48, signatureLineY - 58);
+
+  if (signatureLineY < 30 || signatureLineY > height - 40) return false;
+
+  const signatureWidth = Math.max(180, Math.min(dateX - signatureX - 32, width - signatureX - 190));
+  drawSignatureImage(page, signatureImage, {
+    x: signatureX + 4,
+    y: signatureLineY + 5,
+    maxWidth: signatureWidth,
+    maxHeight: 30
+  });
+
+  drawFittedText(page, signedDate, {
+    x: dateX + 4,
+    y: signatureLineY + 9,
+    maxWidth: Math.max(80, width - dateX - 44),
+    size: 10,
+    font: fonts.boldFont,
+    color: rgb(0.1, 0.34, 0.61)
+  });
+
+  if (signature.title && titleLineY > 24 && titleLineY < height - 30) {
+    drawFittedText(page, signature.title, {
+      x: (titleLabel ? titleLabel.x : signatureX) + 4,
+      y: titleLineY + 9,
+      maxWidth: Math.min(330, width - signatureX - 90),
+      size: 10,
+      font: fonts.font,
+      color: rgb(0.1, 0.12, 0.16)
+    });
+  }
+
+  return true;
+}
+
+function drawPlacedSignatureFields(page, placement, item, signature, signatureImage, fonts) {
+  if (!placement || !placement.signature) return false;
+  const { width, height } = page.getSize();
+  const signatureBox = placement.signature;
+  const signatureX = Number(signatureBox.x);
+  const signatureY = Number(signatureBox.y);
+  const signatureWidth = Number(signatureBox.width || 210);
+  const signatureHeight = Number(signatureBox.height || 34);
+
+  if (![signatureX, signatureY, signatureWidth, signatureHeight].every(Number.isFinite)) return false;
+  if (signatureX < 0 || signatureY < 0 || signatureX > width || signatureY > height) return false;
+
+  drawSignatureImage(page, signatureImage, {
+    x: signatureX,
+    y: signatureY,
+    maxWidth: Math.min(signatureWidth, width - signatureX),
+    maxHeight: Math.min(signatureHeight, height - signatureY)
+  });
+
+  if (placement.name) {
+    drawFittedText(page, signature.typedName || item.recipientName || '', {
+      x: Number(placement.name.x || signatureX),
+      y: Number(placement.name.y || signatureY - 18),
+      maxWidth: Number(placement.name.width || signatureWidth),
+      size: Number(placement.name.size || 10),
+      font: fonts.boldFont,
+      color: rgb(0.1, 0.12, 0.16)
+    });
+  }
+
+  if (placement.date) {
+    const signedDate = formatSignedDate(item.signedAt, placement.date.includeTime !== false);
+    drawFittedText(page, `${placement.date.prefix || ''}${signedDate}`, {
+      x: Number(placement.date.x || signatureX),
+      y: Number(placement.date.y || signatureY - 34),
+      maxWidth: Number(placement.date.width || signatureWidth),
+      size: Number(placement.date.size || 8.5),
+      font: fonts.font,
+      color: rgb(0.42, 0.42, 0.4)
+    });
+  }
+
+  if (placement.title && signature.title) {
+    drawFittedText(page, `${placement.title.prefix || ''}${signature.title}`, {
+      x: Number(placement.title.x || signatureX),
+      y: Number(placement.title.y || signatureY - 48),
+      maxWidth: Number(placement.title.width || signatureWidth),
+      size: Number(placement.title.size || 8.5),
+      font: fonts.font,
+      color: rgb(0.42, 0.42, 0.4)
+    });
+  }
+
+  return true;
+}
+
+function drawVendorContractSignatureFields(page, originalBytes, item, signature, signatureImage, fonts) {
+  const placed = drawPlacedSignatureFields(
+    page,
+    item.signaturePlacement?.vendorContract || item.signaturePlacement,
+    item,
+    signature,
+    signatureImage,
+    fonts
+  );
+  if (placed) return true;
+
+  const { width, height } = page.getSize();
+  const signedDate = formatSignedDate(item.signedAt, true);
+  const label = findPdfLabelPosition(originalBytes, 'Subcontractor Signature');
+  const signatureX = label ? label.x : Math.max(36, width - 250);
+  const lineY = label ? label.y - 14 : 100;
+
+  if (lineY < 30 || lineY > height - 40) return false;
+
+  drawSignatureImage(page, signatureImage, {
+    x: signatureX + 4,
+    y: lineY + 5,
+    maxWidth: Math.min(210, width - signatureX - 36),
+    maxHeight: 34
+  });
+
+  drawFittedText(page, signature.typedName || item.recipientName || '', {
+    x: signatureX,
+    y: lineY - 20,
+    maxWidth: Math.min(220, width - signatureX - 30),
+    size: 11,
+    font: fonts.boldFont,
+    color: rgb(0.1, 0.12, 0.16)
+  });
+
+  drawFittedText(page, `Electronically signed on ${signedDate}`, {
+    x: signatureX,
+    y: lineY - 36,
+    maxWidth: Math.min(240, width - signatureX - 30),
+    size: 8.5,
+    font: fonts.font,
+    color: rgb(0.42, 0.42, 0.4)
+  });
+
+  return true;
+}
+
+function drawGenericSignatureStamp(page, item, signature, signatureImage, fonts) {
   const { width } = page.getSize();
   const stampWidth = Math.min(260, Math.max(210, width - 80));
   const stampHeight = 118;
   const x = Math.max(36, width - stampWidth - 42);
   const y = 42;
-  const signedDate = item.signedAt ? new Date(item.signedAt).toLocaleString('en-US') : '';
+  const signedDate = formatSignedDate(item.signedAt, true);
 
   page.drawRectangle({
     x,
@@ -254,21 +470,16 @@ async function buildSignedPdf(item, signature) {
     x: x + 12,
     y: y + stampHeight - 22,
     size: 10,
-    font: boldFont,
+    font: fonts.boldFont,
     color: rgb(0.1, 0.34, 0.61)
   });
 
-  const signatureBase64 = String(signature.signatureDataUrl || '').replace(/^data:image\/png;base64,/i, '');
-  if (signatureBase64) {
-    const signatureImage = await pdfDoc.embedPng(Buffer.from(signatureBase64, 'base64'));
-    const scaled = signatureImage.scaleToFit(stampWidth - 24, 40);
-    page.drawImage(signatureImage, {
-      x: x + 12,
-      y: y + 50,
-      width: scaled.width,
-      height: scaled.height
-    });
-  }
+  drawSignatureImage(page, signatureImage, {
+    x: x + 12,
+    y: y + 50,
+    maxWidth: stampWidth - 24,
+    maxHeight: 40
+  });
 
   page.drawLine({
     start: { x: x + 12, y: y + 48 },
@@ -276,29 +487,62 @@ async function buildSignedPdf(item, signature) {
     thickness: 0.7,
     color: rgb(0.18, 0.22, 0.28)
   });
-  page.drawText(`Name: ${signature.typedName || item.recipientName || ''}`, {
+  drawFittedText(page, `Name: ${signature.typedName || item.recipientName || ''}`, {
     x: x + 12,
     y: y + 32,
+    maxWidth: stampWidth - 24,
     size: 8,
-    font,
+    font: fonts.font,
     color: rgb(0.1, 0.12, 0.16)
   });
   if (signature.title) {
-    page.drawText(`Title: ${signature.title}`, {
+    drawFittedText(page, `Title: ${signature.title}`, {
       x: x + 12,
       y: y + 20,
+      maxWidth: stampWidth - 24,
       size: 8,
-      font,
+      font: fonts.font,
       color: rgb(0.1, 0.12, 0.16)
     });
   }
-  page.drawText(`Date: ${signedDate}`, {
+  drawFittedText(page, `Date: ${signedDate}`, {
     x: x + 12,
     y: y + 8,
+    maxWidth: stampWidth - 24,
     size: 8,
-    font,
+    font: fonts.font,
     color: rgb(0.1, 0.12, 0.16)
   });
+}
+
+async function buildSignedPdf(item, signature) {
+  const originalContent = item.originalPdf?.content;
+  if (!originalContent) return null;
+
+  const originalBytes = Buffer.from(originalContent, 'base64');
+  const pdfDoc = await PDFDocument.load(originalBytes, { ignoreEncryption: true });
+  const pages = pdfDoc.getPages();
+  const page = pages[pages.length - 1];
+  if (!page) return null;
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const signatureBase64 = String(signature.signatureDataUrl || '').replace(/^data:image\/png;base64,/i, '');
+  const signatureImage = signatureBase64
+    ? await pdfDoc.embedPng(Buffer.from(signatureBase64, 'base64'))
+    : null;
+  const fonts = { font, boldFont };
+  let stampedFields = false;
+
+  if (item.type === 'lien_waiver') {
+    stampedFields = drawLienWaiverSignatureFields(page, originalBytes, item, signature, signatureImage, fonts);
+  } else if (item.type === 'vendor_contract') {
+    stampedFields = drawVendorContractSignatureFields(page, originalBytes, item, signature, signatureImage, fonts);
+  }
+
+  if (!stampedFields) {
+    drawGenericSignatureStamp(page, item, signature, signatureImage, fonts);
+  }
 
   const signedBytes = await pdfDoc.save();
   const originalName = item.originalPdf?.filename || item.filename || 'document.pdf';
@@ -434,7 +678,7 @@ function renderSigningPage(item, token) {
           <input id="typedName" name="typedName" autocomplete="name" required ${disabled ? 'disabled' : ''}/>
           <div class="typed-preview" id="typedPreview">Signature preview</div>
           <label for="title">Title</label>
-          <input id="title" name="title" placeholder="Owner, Project Manager, Authorized Agent" ${disabled ? 'disabled' : ''}/>
+          <input id="title" name="title" placeholder="Owner, Project Manager, Authorized Agent" required ${disabled ? 'disabled' : ''}/>
           <label>Draw Signature</label>
           <div class="signature-box">
             <canvas id="signaturePad" width="700" height="260"></canvas>
@@ -546,7 +790,8 @@ function renderSigningPage(item, token) {
         });
         const data=await res.json().catch(()=>({}));
         if(!res.ok) throw new Error(data.error||'Signature failed');
-        statusEl.textContent='Signed successfully. You may close this page.';
+        statusEl.textContent='Signed successfully. The document preview now shows the signed PDF.';
+        document.querySelector('iframe').src='/api/signing/${encodeURIComponent(token)}/document?ts='+Date.now();
         form.querySelectorAll('input,button').forEach(el=>el.disabled=true);
       }catch(err){
         statusEl.className='status error';
@@ -606,6 +851,7 @@ apiRouter.post('/send', async (req, res) => {
         contentType: 'application/pdf',
         content: pdfContent
       },
+      signaturePlacement: sanitizeSignaturePlacement(body.signaturePlacement || attachment.signaturePlacement),
       sentAt: nowIso(),
       expiresAt: body.expiresAt || addDays(Number(body.expiresDays || DEFAULT_EXPIRES_DAYS)),
       auditTrail: []
@@ -659,10 +905,11 @@ apiRouter.get('/:token/document', async (req, res) => {
   const state = await db.getAll();
   const item = findSigningRequest(state, req.params.token);
   if (!item) return res.status(404).send('Document not found');
-  const pdf = item.originalPdf?.content;
+  const documentPdf = item.status === 'signed' && item.signedPdf?.content ? item.signedPdf : item.originalPdf;
+  const pdf = documentPdf?.content;
   if (!pdf) return res.status(404).send('Document not found');
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${item.originalPdf.filename || 'document.pdf'}"`);
+  res.setHeader('Content-Disposition', `inline; filename="${documentPdf.filename || 'document.pdf'}"`);
   return res.send(Buffer.from(pdf, 'base64'));
 });
 
@@ -673,6 +920,7 @@ apiRouter.post('/:token/sign', async (req, res) => {
     const signatureDataUrl = sanitizeSignatureDataUrl(req.body?.signatureDataUrl);
     const agreed = req.body?.agreed === true || req.body?.agreed === 'true';
     if (!typedName) return res.status(400).json({ error: 'Full legal name is required' });
+    if (!title) return res.status(400).json({ error: 'Signer title is required' });
     if (!agreed) return res.status(400).json({ error: 'Electronic signature consent is required' });
     if (!signatureDataUrl) return res.status(400).json({ error: 'Drawn signature is required' });
 
