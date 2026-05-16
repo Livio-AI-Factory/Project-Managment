@@ -12,6 +12,7 @@ const EMPTY_DB = {
   projects: [],
   activeId: null,
   activeProjectId: null,
+  signingRequests: [],
   vendorDirectory: [],
   users: [],
   roles: [],
@@ -43,6 +44,7 @@ function normalizeDB(data) {
     ...cloneEmptyDB(),
     ...raw,
     projects: Array.isArray(raw.projects) ? raw.projects : [],
+    signingRequests: Array.isArray(raw.signingRequests) ? raw.signingRequests : [],
     vendorDirectory: Array.isArray(raw.vendorDirectory) ? raw.vendorDirectory : [],
     users: Array.isArray(raw.users) ? raw.users : [],
     roles: Array.isArray(raw.roles) ? raw.roles : [],
@@ -102,6 +104,13 @@ function mergePreservingArrayItems(currentValue, incomingValue) {
   return incomingValue;
 }
 
+function mergeTopLevelArray(currentValue, incomingValue) {
+  if (incomingValue === undefined) return currentValue;
+  if (!Array.isArray(currentValue)) return Array.isArray(incomingValue) ? incomingValue : [];
+  if (!Array.isArray(incomingValue)) return currentValue;
+  return mergePreservingArrayItems(currentValue, incomingValue);
+}
+
 function mergeProjectState(currentData, incomingData) {
   const current = normalizeDB(currentData);
   const incoming = normalizeDB(incomingData);
@@ -130,6 +139,7 @@ function mergeProjectState(currentData, incomingData) {
     ...current,
     ...incoming,
     projects,
+    signingRequests: mergeTopLevelArray(current.signingRequests, incoming.signingRequests),
     deletedProjectIds,
     activeId,
     activeProjectId: activeId
