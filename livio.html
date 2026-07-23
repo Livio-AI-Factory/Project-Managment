@@ -3090,6 +3090,17 @@ function handleDrop(e,listId,zone){
 function removePending(fid){
   mPending=mPending.filter(f=>f.id!==fid);
   const el=vEl('ai_'+fid); if(el)el.remove();
+  if(mMode==='venfiles'){
+    const p=proj();
+    const v=(p&&p.vendors||[]).find(x=>x.id===mId);
+    if(v){
+      v.files=[...mPending];
+      delete FA[fid];
+      saveDB();
+      renderVendors();
+      toast('Contract file deleted');
+    }
+  }
 }
 
 function closeModal(){
