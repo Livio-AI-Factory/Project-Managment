@@ -2237,6 +2237,17 @@ function handleDrop(e,listId,zone){
 function removePending(fid){
   mPending=mPending.filter(f=>f.id!==fid);
   const el=vEl('ai_'+fid); if(el)el.remove();
+  if(mMode==='venfiles'){
+    const p=proj();
+    const v=p&&(p.vendors||[]).find(x=>x.id===mId);
+    if(v){
+      v.files=[...mPending];
+      delete FA[fid];
+      saveDB();
+      renderVendors();
+      toast('Contract file deleted');
+    }
+  }
 }
 
 function closeModal(){
@@ -4038,6 +4049,34 @@ let syncTimer=null;
 let syncInFlight=false;
 let hydrateStarted=false;
 let hasLocalChanges=false;
+const SYNC_PENDING_KEY=SK+':pending-sync';
+function markPendingRemoteSync(){
+  try{ if(typeof localStorage!=='undefined') localStorage.setItem(SYNC_PENDING_KEY,String(Date.now())); }catch(e){}
+}
+function clearPendingRemoteSync(){
+  try{ if(typeof localStorage!=='undefined') localStorage.removeItem(SYNC_PENDING_KEY); }catch(e){}
+}
+function hasPendingRemoteSync(maxAge=5*60*1000){
+  try{
+    if(typeof localStorage==='undefined') return false;
+    const at=Number(localStorage.getItem(SYNC_PENDING_KEY)||0);
+    if(!at) return false;
+    if(Date.now()-at>maxAge){clearPendingRemoteSync();return false;}
+    return true;
+  }catch(e){return false;}
+}
+function sendRemoteDBBeacon(){
+  if(typeof navigator==='undefined'||typeof navigator.sendBeacon!=='function') return false;
+  try{
+    DB.activeProjectId=DB.activeId??DB.activeProjectId??null;
+    const blob=new Blob([JSON.stringify(DB)],{type:'application/json'});
+    return navigator.sendBeacon(getApiBase()+'/projects/sync',blob);
+  }catch(e){return false;}
+}
+function flushPendingRemoteSync(){
+  if(!hasLocalChanges&&!hasPendingRemoteSync()) return;
+  if(!sendRemoteDBBeacon()) queueRemoteSync(0);
+}
 function normalizeDBShape(input){
   const raw=(input&&typeof input==='object')?input:{};
   const hasProjectsField=Array.isArray(raw.projects);
@@ -4139,6 +4178,7 @@ async function syncRemoteDB(){
       throw new Error(msg);
     }
     hasLocalChanges=false;
+    clearPendingRemoteSync();
   }catch(e){
     console.warn('Remote sync failed:',e?.message||e);
   }finally{
@@ -4156,8 +4196,8 @@ async function hydrateDBFromServer(){
     const res=await fetch(getApiBase()+'/projects/all');
     if(!res.ok) throw new Error('Failed to load shared data');
     const remote=normalizeDBShape(await res.json());
-    if(hasLocalChanges){
-      queueRemoteSync(50);
+    if(hasLocalChanges||hasPendingRemoteSync()){
+      queueRemoteSync(0);
       return;
     }
     if((remote.projects||[]).length){
@@ -4179,6 +4219,7 @@ saveDB=function(){
     DB.activeProjectId=DB.activeId??DB.activeProjectId??null;
     persistDBLocal();
     hasLocalChanges=true;
+    markPendingRemoteSync();
   }catch(e){
     const msg=e.name==='QuotaExceededError'||e.code===22
       ?'âš  Browser storage full â€” files are too large for local storage. Export your project to save data.'
@@ -4189,6 +4230,13 @@ saveDB=function(){
   registerAllFiles();
   queueRemoteSync();
 };
+if(typeof window!=='undefined'){
+  window.addEventListener('pagehide',flushPendingRemoteSync);
+  window.addEventListener('beforeunload',flushPendingRemoteSync);
+  if(typeof document!=='undefined'){
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingRemoteSync();});
+  }
+}
 handleFileInput = async function(input, listId){
   const files=Array.from(input?.files||[]);
   if(!files.length) return;
