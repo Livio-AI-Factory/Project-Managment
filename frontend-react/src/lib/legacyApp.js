@@ -2357,20 +2357,62 @@ function handleDrop(e,listId,zone){
   e.preventDefault(); zone.classList.remove('drag');
   handleFileInput({files:e.dataTransfer.files},listId);
 }
+function applyPendingFilesToCurrentTarget(){
+  const p=proj();
+  if(!p) return false;
+  if(mMode==='qfiles'){
+    const q=(p.quotes||[]).find(x=>x.id===mId); if(q){q.files=[...mPending];return true;}
+  } else if(mMode==='insfiles'){
+    const ins=(p.inspections||[]).find(x=>x.id===mId); if(ins){ins.files=[...mPending];return true;}
+  } else if(mMode==='msppfiles'){
+    const parts=(mId||'').split('|');
+    const ms=(p.milestones||[]).find(x=>x.id===parts[0]);
+    const pp=ms?(ms.progressPayments||[]).find(x=>x.id===parts[1]):null;
+    if(pp){pp.files=[...mPending];return true;}
+  } else if(mMode==='payproof'){
+    const parts=(mId||'').split('|');
+    const q=(p.quotes||[]).find(x=>x.id===parts[0]);
+    const pm=q?(q.payMilestones||[]).find(x=>x.id===parts[1]):null;
+    if(pm){pm.files=[...mPending];return true;}
+  } else if(mMode==='payinvoice'){
+    const parts=(mId||'').split('|');
+    const q=(p.quotes||[]).find(x=>x.id===parts[0]);
+    const pm=q?(q.payMilestones||[]).find(x=>x.id===parts[1]):null;
+    if(pm){pm.invoiceFiles=[...mPending];return true;}
+  } else if(mMode==='venfiles'){
+    const v=(p.vendors||[]).find(x=>x.id===mId); if(v){v.files=[...mPending];return true;}
+  } else if(mMode==='ppfiles'){
+    const parts=(mId||'').split('|');
+    const inv=(p.invoices||[]).find(x=>x.id===parts[0]);
+    const pp=inv?(inv.partialPayments||[]).find(x=>x.id===parts[1]):null;
+    if(pp){pp.files=[...mPending];return true;}
+  } else if(mMode==='invproof'){
+    const inv=(p.invoices||[]).find(x=>x.id===mId); if(inv){inv.proofFiles=[...mPending];return true;}
+  } else if(mMode==='invlien'){
+    const inv=(p.invoices||[]).find(x=>x.id===mId); if(inv){inv.lienFiles=[...mPending];return true;}
+  } else if(mMode==='invfiles'){
+    const inv=(p.invoices||[]).find(x=>x.id===mId); if(inv){inv.files=[...mPending];return true;}
+  } else if(mMode==='qafiles'){
+    const it=(p.qaqcLog||[]).find(x=>x.id===mId); if(it){it.files=[...mPending];return true;}
+  } else if(mMode==='lienwvr'){
+    const parts=(mId||'').split('|');
+    const q=(p.quotes||[]).find(x=>x.id===parts[0]);
+    const pm=q?(q.payMilestones||[]).find(x=>x.id===parts[1]):null;
+    if(pm){pm.lienFiles=[...mPending];return true;}
+  }
+  return false;
+}
 function removePending(fid){
   mPending=mPending.filter(f=>f.id!==fid);
   const el=vEl('ai_'+fid); if(el)el.remove();
-  if(mMode==='venfiles'){
-    const p=proj();
-    const v=p&&(p.vendors||[]).find(x=>x.id===mId);
-    if(v){
-      v.files=[...mPending];
-      delete FA[fid];
-      saveDB();
-      flushPendingRemoteSync();
-      renderVendors();
-      toast('Contract file deleted');
-    }
+  if(applyPendingFilesToCurrentTarget()){
+    delete FA[fid];
+    saveDB();
+    flushPendingRemoteSync();
+    if(mMode==='venfiles') renderVendors();
+    else if(typeof renderAll==='function') renderAll();
+    renderPendingInModal();
+    toast('Attachment deleted');
   }
 }
 
@@ -4303,17 +4345,27 @@ function hasPendingRemoteSync(maxAge=5*60*1000){
     return true;
   }catch(e){return false;}
 }
-function sendRemoteDBBeacon(){
+function sendRemoteDBBeacon(syncPayload=buildRemoteSyncPayload()){
   if(typeof navigator==='undefined'||typeof navigator.sendBeacon!=='function') return false;
   try{
-    const syncPayload=buildRemoteSyncPayload();
     const blob=new Blob([JSON.stringify(syncPayload)],{type:'application/json'});
     return navigator.sendBeacon(getApiBase()+'/projects/sync',blob);
   }catch(e){return false;}
 }
+function sendRemoteProjectBeacon(project){
+  if(!project||!project.id||shouldPersistBrowserDB()) return true;
+  if(typeof navigator==='undefined'||typeof navigator.sendBeacon!=='function') return false;
+  try{
+    const blob=new Blob([JSON.stringify(project)],{type:'application/json'});
+    return navigator.sendBeacon(getApiBase()+'/projects',blob);
+  }catch(e){return false;}
+}
 function flushPendingRemoteSync(){
   if(!hasLocalChanges&&!hasPendingRemoteSync()) return;
-  if(!sendRemoteDBBeacon()) queueRemoteSync(0);
+  const syncPayload=buildRemoteSyncPayload();
+  const dbSent=sendRemoteDBBeacon(syncPayload);
+  const projectSent=sendRemoteProjectBeacon(getRemoteProjectSnapshot(syncPayload));
+  if(!dbSent||!projectSent) queueRemoteSync(0);
 }
 let remoteHydrationPending=requiresRemoteHydration();
 let remoteHydrationError='';
@@ -4336,6 +4388,27 @@ function buildRemoteSyncPayload(){
     activeProjectId:activeId,
     deletedProjectIds:normalizeDeletedProjectIds(DB?.deletedProjectIds||DB?.deletedProjects)
   };
+}
+function getRemoteProjectSnapshot(source=DB){
+  const projects=Array.isArray(source?.projects)?source.projects:[];
+  const activeId=source?.activeId??source?.activeProjectId??null;
+  return projects.find(p=>p&&p.id===activeId)||projects[0]||null;
+}
+async function saveRemoteProjectSnapshot(project){
+  if(!project||!project.id||shouldPersistBrowserDB()) return;
+  const res=await fetch(getApiBase()+'/projects',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(project)
+  });
+  if(!res.ok){
+    let msg='Failed to save project';
+    try{
+      const data=await res.json();
+      msg=data?.error||msg;
+    }catch(e){}
+    throw new Error(msg);
+  }
 }
 function normalizeDeletedProjectIds(input){
   const ids=Array.isArray(input)
@@ -4441,6 +4514,7 @@ async function syncRemoteDB(){
   const revisionAtStart=saveRevision;
   try{
     const syncPayload=buildRemoteSyncPayload();
+    await saveRemoteProjectSnapshot(getRemoteProjectSnapshot(syncPayload));
     const res=await fetch(getApiBase()+'/projects/sync',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
