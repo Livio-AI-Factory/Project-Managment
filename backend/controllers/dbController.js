@@ -104,21 +104,6 @@ function mergePreservingArrayItems(currentValue, incomingValue) {
   return incomingValue;
 }
 
-function mergeReplacingArrays(currentValue, incomingValue) {
-  if (incomingValue === undefined) return currentValue;
-  if (Array.isArray(incomingValue)) return incomingValue;
-
-  if (isPlainObject(currentValue) && isPlainObject(incomingValue)) {
-    const result = { ...currentValue };
-    for (const key of Object.keys(incomingValue)) {
-      result[key] = mergeReplacingArrays(currentValue[key], incomingValue[key]);
-    }
-    return result;
-  }
-
-  return incomingValue;
-}
-
 function mergeTopLevelArray(currentValue, incomingValue) {
   if (incomingValue === undefined) return currentValue;
   if (!Array.isArray(currentValue)) return Array.isArray(incomingValue) ? incomingValue : [];
@@ -129,10 +114,7 @@ function mergeTopLevelArray(currentValue, incomingValue) {
 function mergeProjectState(currentData, incomingData) {
   const current = normalizeDB(currentData);
   const incoming = normalizeDB(incomingData);
-  const deletedProjectIds = normalizeDeletedProjectIds([
-    ...(current.deletedProjectIds || []),
-    ...(incoming.deletedProjectIds || [])
-  ]);
+  const deletedProjectIds = normalizeDeletedProjectIds(current.deletedProjectIds);
   const deleted = new Set(deletedProjectIds);
   const byId = new Map();
 
@@ -143,7 +125,7 @@ function mergeProjectState(currentData, incomingData) {
   for (const project of incoming.projects || []) {
     if (project?.id && !deleted.has(project.id)) {
       const existing = byId.get(project.id);
-      byId.set(project.id, existing ? mergeReplacingArrays(existing, project) : project);
+      byId.set(project.id, existing ? mergePreservingArrayItems(existing, project) : project);
     }
   }
 
@@ -251,13 +233,9 @@ async function saveAll(data) {
   const incomingHasProjects = Array.isArray(data?.projects) && normalized.projects.length > 0;
 
   if (currentHasProjects && !incomingHasProjects) {
-    const incomingDeleted = new Set(normalizeDeletedProjectIds(normalized.deletedProjectIds));
-    const deletesKnownProjects = current.projects.every((project) => project?.id && incomingDeleted.has(project.id));
-    if (!deletesKnownProjects) {
-      const err = new Error('Refusing to overwrite existing projects with an empty sync payload');
-      err.statusCode = 409;
-      throw err;
-    }
+    const err = new Error('Refusing to overwrite existing projects with an empty sync payload');
+    err.statusCode = 409;
+    throw err;
   }
 
   await writeDB(mergeProjectState(current, normalized));

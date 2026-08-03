@@ -2360,18 +2360,6 @@ function handleDrop(e,listId,zone){
 function removePending(fid){
   mPending=mPending.filter(f=>f.id!==fid);
   const el=vEl('ai_'+fid); if(el)el.remove();
-  if(mMode==='venfiles'){
-    const p=proj();
-    const v=p&&(p.vendors||[]).find(x=>x.id===mId);
-    if(v){
-      v.files=[...mPending];
-      delete FA[fid];
-      saveDB();
-      flushPendingRemoteSync();
-      renderVendors();
-      toast('Contract file deleted');
-    }
-  }
 }
 
 function closeModal(){
@@ -4287,34 +4275,6 @@ let hydrateStarted=false;
 let hasLocalChanges=false;
 let saveRevision=0;
 let syncRequestedWhileInFlight=false;
-const SYNC_PENDING_KEY=SK+':pending-sync';
-function markPendingRemoteSync(){
-  try{ if(typeof localStorage!=='undefined') localStorage.setItem(SYNC_PENDING_KEY,String(Date.now())); }catch(e){}
-}
-function clearPendingRemoteSync(){
-  try{ if(typeof localStorage!=='undefined') localStorage.removeItem(SYNC_PENDING_KEY); }catch(e){}
-}
-function hasPendingRemoteSync(maxAge=5*60*1000){
-  try{
-    if(typeof localStorage==='undefined') return false;
-    const at=Number(localStorage.getItem(SYNC_PENDING_KEY)||0);
-    if(!at) return false;
-    if(Date.now()-at>maxAge){clearPendingRemoteSync();return false;}
-    return true;
-  }catch(e){return false;}
-}
-function sendRemoteDBBeacon(){
-  if(typeof navigator==='undefined'||typeof navigator.sendBeacon!=='function') return false;
-  try{
-    const syncPayload=buildRemoteSyncPayload();
-    const blob=new Blob([JSON.stringify(syncPayload)],{type:'application/json'});
-    return navigator.sendBeacon(getApiBase()+'/projects/sync',blob);
-  }catch(e){return false;}
-}
-function flushPendingRemoteSync(){
-  if(!hasLocalChanges&&!hasPendingRemoteSync()) return;
-  if(!sendRemoteDBBeacon()) queueRemoteSync(0);
-}
 let remoteHydrationPending=requiresRemoteHydration();
 let remoteHydrationError='';
 function normalizeSharedUser(user, index=0){
@@ -4326,15 +4286,6 @@ function normalizeSharedUser(user, index=0){
     password: String(raw.password||'').trim(),
     role: String(raw.role||'Manager').trim()||'Manager',
     email: String(raw.email||'').trim()
-  };
-}
-function buildRemoteSyncPayload(){
-  const activeId=DB?.activeId??DB?.activeProjectId??null;
-  return {
-    ...DB,
-    activeId,
-    activeProjectId:activeId,
-    deletedProjectIds:normalizeDeletedProjectIds(DB?.deletedProjectIds||DB?.deletedProjects)
   };
 }
 function normalizeDeletedProjectIds(input){
@@ -4440,7 +4391,10 @@ async function syncRemoteDB(){
   syncRequestedWhileInFlight=false;
   const revisionAtStart=saveRevision;
   try{
-    const syncPayload=buildRemoteSyncPayload();
+    const syncPayload={
+      ...DB,
+      deletedProjectIds:[]
+    };
     const res=await fetch(getApiBase()+'/projects/sync',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -4454,10 +4408,7 @@ async function syncRemoteDB(){
       }catch(e){}
       throw new Error(msg);
     }
-    if(saveRevision===revisionAtStart){
-      hasLocalChanges=false;
-      clearPendingRemoteSync();
-    }
+    if(saveRevision===revisionAtStart) hasLocalChanges=false;
   }catch(e){
     console.warn('Remote sync failed:',e?.message||e);
   }finally{
@@ -4498,8 +4449,8 @@ async function hydrateDBFromServer(){
     if(!res.ok) throw new Error('Failed to load shared data');
     const remote=normalizeDBShape(await res.json());
     remoteHydrationPending=false;
-    if(hasLocalChanges||hasPendingRemoteSync()){
-      queueRemoteSync(0);
+    if(hasLocalChanges){
+      queueRemoteSync(50);
       return;
     }
     if((remote.projects||[]).length){
@@ -4544,7 +4495,6 @@ saveDB=function(){
     persistDBLocal();
     hasLocalChanges=true;
     saveRevision+=1;
-    markPendingRemoteSync();
   }catch(e){
     const msg=e.name==='QuotaExceededError'||e.code===22
       ?'âš  Browser storage full â€” files are too large for local storage. Export your project to save data.'
@@ -4555,13 +4505,6 @@ saveDB=function(){
   registerAllFiles();
   queueRemoteSync();
 };
-if(typeof window!=='undefined'){
-  window.addEventListener('pagehide',flushPendingRemoteSync);
-  window.addEventListener('beforeunload',flushPendingRemoteSync);
-  if(typeof document!=='undefined'){
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingRemoteSync();});
-  }
-}
 handleFileInput = async function(input, listId){
   const files=Array.from(input?.files||[]);
   if(!files.length) return;
@@ -7561,9 +7504,7 @@ sendContractEmailModal = async function(){
 function delVendor(vid){
   const p=proj();if(!p||!confirm('Delete this vendor contract?'))return;
   p.vendors=(p.vendors||[]).filter(x=>x.id!==vid);
-  saveDB();
-  flushPendingRemoteSync();
-  renderAll();toast('Deleted');
+  saveDB();renderAll();toast('🗑 Deleted');
 }
 
 
